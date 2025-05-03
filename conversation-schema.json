@@ -1,0 +1,93 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Conversation Situations Schema",
+  "description": "Schema for defining groups of conversational situations with signals and strategies",
+  "type": "object",
+  "properties": {
+    "situationGroups": {
+      "type": "array",
+      "description": "Collection of situation groups",
+      "items": {
+        "type": "object",
+        "required": ["title", "emoji", "situations"],
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Title of the situation group"
+          },
+          "emoji": {
+            "type": "string",
+            "description": "Emoji representing the situation group"
+          },
+          "description": {
+            "type": "string",
+            "description": "Optional description of the situation group"
+          },
+          "situations": {
+            "type": "array",
+            "description": "Collection of situations in this group",
+            "items": {
+              "type": "object",
+              "required": ["situation", "signals", "strategy"],
+              "properties": {
+                "situation": {
+                  "type": "string",
+                  "description": "Name of the situation"
+                },
+                "signals": {
+                  "type": "string",
+                  "description": "Signs that indicate this situation is occurring"
+                },
+                "strategy": {
+                  "type": "string",
+                  "description": "Recommended approach to handle this situation"
+                },
+                "examples": {
+                  "type": "array",
+                  "description": "Examples of this situation in action",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "context": {
+                        "type": "string",
+                        "description": "Context for the example"
+                      },
+                      "conversation": {
+                        "type": "array",
+                        "description": "Sample conversation demonstrating the situation",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "speaker": {
+                              "type": "string",
+                              "description": "Who is speaking"
+                            },
+                            "message": {
+                              "type": "string",
+                              "description": "What was said"
+                            },
+                            "note": {
+                              "type": "string",
+                              "description": "Optional note about this message"
+                            }
+                          },
+                          "required": ["speaker", "message"]
+                        }
+                      },
+                      "explanation": {
+                        "type": "string",
+                        "description": "Explanation of the signals and appropriate response"
+                      }
+                    },
+                    "required": ["conversation"]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "required": ["situationGroups"]
+}

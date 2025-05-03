@@ -1,0 +1,119 @@
+{
+  "title": "Rudeness or Aggression",
+  "emoji": "⚠️",
+  "description": "Signs that a conversation participant is being rude, hostile, or aggressive",
+  "situations": [
+    {
+      "situation": "Direct insults",
+      "signals": "Name-calling, personal attacks, derogatory language",
+      "strategy": "Set clear boundaries, disengage if needed",
+      "examples": [
+        {
+          "context": "Online discussion forum",
+          "conversation": [
+            {
+              "speaker": "User A",
+              "message": "I think the solution to this problem is X because of these reasons...",
+              "note": "Sharing opinion with reasoning"
+            },
+            {
+              "speaker": "User B",
+              "message": "That's the stupidest thing I've ever heard. Only an idiot would think X works.",
+              "note": "Direct insult and derogatory language"
+            },
+            {
+              "speaker": "User A",
+              "message": "I understand you disagree, but I'd appreciate if we could discuss this respectfully without personal attacks. If you have specific critiques of the approach, I'm open to hearing them.",
+              "note": "Setting clear boundary while leaving door open for constructive dialogue"
+            }
+          ],
+          "explanation": "User B uses direct insults rather than addressing the content of the argument. User A responds by clearly establishing a boundary around acceptable communication while still showing openness to meaningful discussion."
+        }
+      ]
+    },
+    {
+      "situation": "Passive-aggressive comments",
+      "signals": "Backhanded compliments, sarcasm, subtle digs",
+      "strategy": "Name the behavior directly, ask for clarification",
+      "examples": [
+        {
+          "context": "Work team chat",
+          "conversation": [
+            {
+              "speaker": "Team Member A",
+              "message": "Just finished the presentation for tomorrow!",
+              "note": "Sharing accomplishment"
+            },
+            {
+              "speaker": "Team Member B",
+              "message": "Wow, finally done? I guess that's impressive for someone with your experience level.",
+              "note": "Backhanded compliment with subtle dig"
+            },
+            {
+              "speaker": "Team Member A",
+              "message": "That comment feels a bit dismissive. Is there something specific about the timing or my work that's concerning you?",
+              "note": "Naming the behavior and asking for clarification"
+            }
+          ],
+          "explanation": "Team Member B uses a passive-aggressive comment that appears to be a compliment but actually contains a dig. Team Member A directly addresses the tone without escalating and invites clarification."
+        }
+      ]
+    },
+    {
+      "situation": "Rapid escalation",
+      "signals": "Quick jump to hostility, out-of-proportion anger",
+      "strategy": "De-escalate, acknowledge emotion, suggest pause",
+      "examples": [
+        {
+          "context": "Customer service interaction",
+          "conversation": [
+            {
+              "speaker": "Customer Service",
+              "message": "I'm sorry, but that item is currently out of stock. We expect to have it available again next week.",
+              "note": "Standard information delivery"
+            },
+            {
+              "speaker": "Customer",
+              "message": "Are you kidding me?! This is COMPLETELY UNACCEPTABLE! You people are absolutely incompetent! I need to speak to your manager RIGHT NOW!",
+              "note": "Rapid escalation with disproportionate anger"
+            },
+            {
+              "speaker": "Customer Service",
+              "message": "I understand this is frustrating and disappointing. I'd be happy to connect you with a manager, or if you prefer, I can look into alternative options or a special arrangement. What would work best for you at this point?",
+              "note": "De-escalation by acknowledging emotion and offering options"
+            }
+          ],
+          "explanation": "Customer escalates rapidly with anger disproportionate to the situation. The service representative acknowledges the emotion without mirroring the hostility and offers constructive options to move forward."
+        }
+      ]
+    },
+    {
+      "situation": "Dismissive tone",
+      "signals": "Eye-rolling language, condescension, minimizing",
+      "strategy": "Assert value calmly, redirect to substance",
+      "examples": [
+        {
+          "context": "Group brainstorming session",
+          "conversation": [
+            {
+              "speaker": "Participant A",
+              "message": "What if we tried approaching this from a different angle, like focusing on the community aspect first?",
+              "note": "Offering alternative perspective"
+            },
+            {
+              "speaker": "Participant B",
+              "message": "Ugh, we've been over this already. That's not even worth discussing since it obviously wouldn't work in the real world.",
+              "note": "Dismissive tone without substantive critique"
+            },
+            {
+              "speaker": "Facilitator",
+              "message": "Actually, I think there's value in exploring different perspectives. Participant A, could you elaborate on how you see that community-first approach working? What specific aspects would it address?",
+              "note": "Asserting value of the contribution and redirecting to substance"
+            }
+          ],
+          "explanation": "Participant B dismisses an idea without substantive critique. The facilitator calmly asserts the value of exploring different perspectives and redirects the conversation to the substance of the idea."
+        }
+      ]
+    }
+  ]
+}

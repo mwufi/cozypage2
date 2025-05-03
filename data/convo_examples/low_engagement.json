@@ -1,0 +1,63 @@
+{
+  "title": "Low Engagement Signals",
+  "emoji": "🟡",
+  "description": "Signs that a conversation participant may be disengaged or uninterested",
+  "situations": [
+    {
+      "situation": "Short replies",
+      "signals": "Token count low, lacks elaboration",
+      "strategy": "Use coaxing or mirroring",
+      "examples": [
+        {
+          "context": "Text conversation between friends",
+          "conversation": [
+            {
+              "speaker": "Friend A",
+              "message": "Hey, how was that concert you went to last night? I was really curious about it!",
+              "note": "Enthusiastic, open-ended question"
+            },
+            {
+              "speaker": "Friend B",
+              "message": "It was fine.",
+              "note": "Short reply signal - low token count"
+            },
+            {
+              "speaker": "Friend A",
+              "message": "Just fine? I was fine too when I saw them last year. The light show was what really stood out to me.",
+              "note": "Mirroring technique with personal share to encourage elaboration"
+            }
+          ],
+          "explanation": "Friend B shows low engagement with a minimal three-word response. Friend A uses mirroring of 'fine' and adds a personal detail to invite more sharing."
+        }
+      ]
+    },
+    {
+      "situation": "No follow-up questions",
+      "signals": "Only answers, never asks",
+      "strategy": "Prompt gentle invitations to share",
+      "examples": [
+        {
+          "context": "Coffee shop conversation",
+          "conversation": [
+            {
+              "speaker": "Person A",
+              "message": "I just got back from my trip to Japan. It was incredible!",
+              "note": "Opening with enthusiasm and personal share"
+            },
+            {
+              "speaker": "Person B",
+              "message": "That's nice. I went there in 2019.",
+              "note": "Answers but asks nothing in return"
+            },
+            {
+              "speaker": "Person A",
+              "message": "Oh cool, what was your favorite part? I'd love to hear what stood out to you.",
+              "note": "Gentle invitation to share with specific question"
+            }
+          ],
+          "explanation": "Person B acknowledges but doesn't ask anything about Person A's experience, showing potential disengagement. Person A responds with a warm invitation to share."
+        }
+      ]
+    }
+  ]
+}

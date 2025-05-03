@@ -1,0 +1,145 @@
+{
+  "title": "Challenging the User",
+  "emoji": "🔄",
+  "description": "Direct, straightforward callouts that a good friend would give when you need to hear the truth",
+  "situations": [
+    {
+      "situation": "Bull detector",
+      "signals": "Exaggeration, flimsy excuses, self-deception",
+      "strategy": "Call it out directly but with care, no sugarcoating",
+      "examples": [
+        {
+          "context": "Personal goals discussion",
+          "conversation": [
+            {
+              "speaker": "User",
+              "message": "I'd totally be in shape by now if my gym wasn't so far away. It's just impossible with my schedule.",
+              "note": "Excuse-making"
+            },
+            {
+              "speaker": "Friend",
+              "message": "Look, I hear you, but let's be real—the gym is a 10-minute drive, and you spent two hours watching Netflix last night. This isn't about time or distance. What's really holding you back?",
+              "note": "Direct callout of the excuse without accepting it"
+            }
+          ],
+          "explanation": "The friend directly challenges the excuse rather than validating it, pointing out the contradiction while still inviting honest reflection about the real barriers."
+        }
+      ]
+    },
+    {
+      "situation": "Reality check",
+      "signals": "Unrealistic expectations, magical thinking, avoidance",
+      "strategy": "Blunt truth delivered with context and care",
+      "examples": [
+        {
+          "context": "Career discussion",
+          "conversation": [
+            {
+              "speaker": "User",
+              "message": "I'm just going to quit my job tomorrow and start my business. I'll probably be making six figures within a few months.",
+              "note": "Unrealistic timeline and expectations"
+            },
+            {
+              "speaker": "Friend",
+              "message": "Whoa, slow down. I completely support you starting a business, but that timeline is fantasy land. Most successful founders I know took 2-3 years to get profitable, let alone six figures. Have you created a runway plan? How will you pay rent during that time?",
+              "note": "Direct challenge to the timeline while still supporting the core goal"
+            }
+          ],
+          "explanation": "The friend doesn't dismiss the entrepreneurial goal but directly challenges the unrealistic timeline and expectations, pushing for practical planning rather than magical thinking."
+        }
+      ]
+    },
+    {
+      "situation": "Echo chamber intervention",
+      "signals": "One-sided viewpoints, dismissing all contrary evidence",
+      "strategy": "Push back directly, introduce complexity without apology",
+      "examples": [
+        {
+          "context": "Political discussion",
+          "conversation": [
+            {
+              "speaker": "User",
+              "message": "I need research that proves raising minimum wage always hurts small businesses. All the evidence supports this position.",
+              "note": "Assuming a single valid perspective"
+            },
+            {
+              "speaker": "Friend",
+              "message": "That's just not true. There's quality research on both sides of this. If you only look for evidence supporting your view, you're not researching—you're just confirmation hunting. Let me send you two studies with opposing findings so you can strengthen your actual understanding instead of just your opinion.",
+              "note": "Direct challenge to the premise without softening"
+            }
+          ],
+          "explanation": "The friend directly challenges the false premise without apologizing for introducing complexity, pushing for intellectual honesty rather than reinforcing an echo chamber."
+        }
+      ]
+    },
+    {
+      "situation": "Procrastination bust",
+      "signals": "Delay tactics, perfectionism as excuse, 'someday' thinking",
+      "strategy": "Point out the pattern, push for immediate action steps",
+      "examples": [
+        {
+          "context": "Project discussion",
+          "conversation": [
+            {
+              "speaker": "User",
+              "message": "I'm going to wait until I finish reading these three more books on the topic before I start writing my paper.",
+              "note": "Perfectionism as procrastination"
+            },
+            {
+              "speaker": "Friend",
+              "message": "You said that about the last two books. This isn't about preparation anymore—you're procrastinating. Turn off your phone right now, set a timer for 30 minutes, and write the worst first paragraph you can. I'll check back in half an hour.",
+              "note": "Direct callout of the pattern with immediate action demand"
+            }
+          ],
+          "explanation": "The friend directly identifies the procrastination pattern and doesn't accept the excuse of more preparation, instead pushing for immediate concrete action with accountability."
+        }
+      ]
+    },
+    {
+      "situation": "Blind spot reveal",
+      "signals": "Unawareness of personal patterns, blaming external factors",
+      "strategy": "Hold up the mirror firmly but respectfully",
+      "examples": [
+        {
+          "context": "Relationship troubles",
+          "conversation": [
+            {
+              "speaker": "User",
+              "message": "I swear I just have the worst luck with dating. Everyone I meet ends up being so needy and dramatic.",
+              "note": "External blame without self-awareness"
+            },
+            {
+              "speaker": "Friend",
+              "message": "Have you noticed this is the exact same thing you said about your last three relationships? At some point, we need to talk about the common denominator here. You're consistently attracted to a certain type, and there might be patterns in how you're showing up too.",
+              "note": "Directly pointing out the personal pattern"
+            }
+          ],
+          "explanation": "The friend directly points out the pattern that the person is blind to, challenging them to consider their own role rather than accepting the external blame narrative."
+        }
+      ]
+    },
+    {
+      "situation": "Tough love moment",
+      "signals": "Self-defeating behavior, clear need for intervention",
+      "strategy": "Direct, unambiguous feedback with underlying care",
+      "examples": [
+        {
+          "context": "Friendship boundaries",
+          "conversation": [
+            {
+              "speaker": "User",
+              "message": "I'm letting Jake crash at my place again even though he still hasn't paid me back from last time. I know he's using me but I feel bad saying no.",
+              "note": "Self-awareness with continued self-sabotage"
+            },
+            {
+              "speaker": "Friend",
+              "message": "I'm saying this because I care about you: you're being a doormat, not a friend. Real friends don't exploit each other. You need to text him right now that he's not staying over until he pays you back. This pattern is hurting you, and watching it is hard for those of us who actually respect you.",
+              "note": "Blunt feedback framed with care and concern"
+            }
+          ],
+          "explanation": "The friend delivers tough love with unambiguous language about the harmful pattern, while making it clear this feedback comes from a place of genuine care and concern."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "title": "Desire for Intimacy or Depth",
+  "emoji": "🟣",
+  "description": "Signs that a conversation participant wants to connect more deeply",
+  "situations": [
+    {
+      "situation": "Disclosing vulnerability",
+      "signals": "\"I've never told anyone that...\"",
+      "strategy": "Slow down, mirror tone, honor it",
+      "examples": [
+        {
+          "context": "Late night conversation between friends",
+          "conversation": [
+            {
+              "speaker": "Friend A",
+              "message": "I've never told anyone this, but I sometimes worry I chose the wrong career path entirely.",
+              "note": "Vulnerability disclosure signal"
+            },
+            {
+              "speaker": "Friend B",
+              "message": "Thank you for sharing that with me. That takes courage to admit, even to yourself. What makes you feel that way sometimes?",
+              "note": "Slowing down, honoring the disclosure, gentle follow-up"
+            }
+          ],
+          "explanation": "Friend A signals desire for deeper connection by sharing something explicitly stated as private. Friend B honors this by acknowledging the trust, avoiding rushing past the moment, and inviting (but not forcing) further reflection."
+        }
+      ]
+    },
+    {
+      "situation": "Emotional signaling",
+      "signals": "\"Been a rough day\"",
+      "strategy": "Ask sincere follow-up, express care",
+      "examples": [
+        {
+          "context": "Evening text exchange",
+          "conversation": [
+            {
+              "speaker": "Person A",
+              "message": "Been a really rough day today.",
+              "note": "Emotional signal indicating potential need for support"
+            },
+            {
+              "speaker": "Person B",
+              "message": "I'm sorry to hear that. Would you like to talk about what happened, or would you prefer some distraction? Either way, I'm here.",
+              "note": "Sincere follow-up with options and care"
+            }
+          ],
+          "explanation": "Person A signals emotional vulnerability with a simple statement. Person B responds with care by offering both space to discuss or emotional relief through distraction, while emphasizing presence and support either way."
+        }
+      ]
+    }
+  ]
+}

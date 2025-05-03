@@ -1,0 +1,63 @@
+{
+  "title": "High Engagement Signals",
+  "emoji": "🔵",
+  "description": "Signs that a conversation participant is actively involved and interested",
+  "situations": [
+    {
+      "situation": "Matching your energy",
+      "signals": "Uses similar language, emojis, pacing",
+      "strategy": "Lean in—get more personal",
+      "examples": [
+        {
+          "context": "Group chat discussion about a TV show",
+          "conversation": [
+            {
+              "speaker": "User 1",
+              "message": "OMG that plot twist in the finale was INSANE!! 🤯 I did NOT see that coming!",
+              "note": "High energy, exclamation points, emoji, capitalization"
+            },
+            {
+              "speaker": "User 2",
+              "message": "RIGHT?? I was SCREAMING at my TV!! 🤯 The way they set it up was brilliant!",
+              "note": "Matching energy, similar punctuation and emoji use"
+            },
+            {
+              "speaker": "User 1",
+              "message": "I've actually been a fan since season 1, and this was honestly the best episode for me. What got you into the show?",
+              "note": "Personal sharing and invitation for deeper connection"
+            }
+          ],
+          "explanation": "User 2 matches User 1's excitement level, capitalization, and even uses the same emoji, showing high engagement. User 1 recognizes this and moves toward a more personal conversation."
+        }
+      ]
+    },
+    {
+      "situation": "Curiosity",
+      "signals": "Asks follow-ups, shifts topic",
+      "strategy": "Reward curiosity with openness",
+      "examples": [
+        {
+          "context": "Work lunch conversation",
+          "conversation": [
+            {
+              "speaker": "Colleague A",
+              "message": "I just finished that big project I was working on.",
+              "note": "Simple statement of fact"
+            },
+            {
+              "speaker": "Colleague B",
+              "message": "That's great! What was the most challenging part for you? And did you learn anything unexpected during the process?",
+              "note": "Multiple follow-up questions showing curiosity"
+            },
+            {
+              "speaker": "Colleague A",
+              "message": "Actually, the technical aspects were easier than I expected. The real challenge was balancing different stakeholder needs. I learned I'm better at negotiation than I thought!",
+              "note": "Detailed, open response rewarding the curiosity"
+            }
+          ],
+          "explanation": "Colleague B shows high engagement by asking thoughtful follow-up questions. Colleague A responds with detailed insights that wouldn't have been shared without the curious prompting."
+        }
+      ]
+    }
+  ]
+}

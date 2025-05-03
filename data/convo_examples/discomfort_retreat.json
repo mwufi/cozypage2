@@ -1,0 +1,63 @@
+{
+  "title": "Discomfort or Retreat",
+  "emoji": "🔴",
+  "description": "Signs that a conversation participant is uncomfortable or pulling back",
+  "situations": [
+    {
+      "situation": "Abrupt tone shifts",
+      "signals": "\"idk\", \"whatever\", \"nah\", \"tbh\" suddenly",
+      "strategy": "Use gentle check-in or pivot topics",
+      "examples": [
+        {
+          "context": "Messaging about weekend plans",
+          "conversation": [
+            {
+              "speaker": "Friend A",
+              "message": "So I was thinking we could go to that new restaurant downtown for dinner Friday, then maybe check out that concert?",
+              "note": "Enthusiastic planning"
+            },
+            {
+              "speaker": "Friend B",
+              "message": "idk whatever is fine",
+              "note": "Sudden shift to disinterested language"
+            },
+            {
+              "speaker": "Friend A",
+              "message": "Everything ok? We could also just do something low-key if you prefer, or rain check if this week is busy for you.",
+              "note": "Gentle check-in and offering alternatives"
+            }
+          ],
+          "explanation": "Friend B's abrupt tonal shift with 'idk whatever' signals potential discomfort with the proposed plans. Friend A responds with a check-in and offers less pressure alternatives."
+        }
+      ]
+    },
+    {
+      "situation": "Passive shutdown",
+      "signals": "Stops responding, or \"cool\" then silence",
+      "strategy": "Soft sign-off or emotional validation",
+      "examples": [
+        {
+          "context": "Dating app conversation",
+          "conversation": [
+            {
+              "speaker": "Person A",
+              "message": "So I'm thinking we should definitely meet up soon! How about coffee this weekend?",
+              "note": "Forward suggestion"
+            },
+            {
+              "speaker": "Person B",
+              "message": "Cool.",
+              "note": "One-word response followed by no further messages"
+            },
+            {
+              "speaker": "Person A",
+              "message": "Seems like I might be moving too quickly. No pressure at all - I'm around if you'd like to chat more. Enjoy your week either way!",
+              "note": "Soft sign-off with validation"
+            }
+          ],
+          "explanation": "Person B's minimal 'Cool' followed by silence indicates discomfort with the suggestion. Person A recognizes this shutdown and provides a warm exit that validates the other person's feelings without pushing further."
+        }
+      ]
+    }
+  ]
+}
