@@ -107,8 +107,6 @@ class Agent {
         prompt += "\n== INSTRUCTIONS ==\n";
         prompt += "Respond to the human as if you are " + this.name + ".\n";
 
-        console.log(prompt);
-
         return prompt;
     }
 
@@ -233,6 +231,7 @@ function handleCommand(command: string): boolean {
         console.log('/help - Show this help message');
         console.log('/status - Show current agent settings');
         console.log('/sliders - List all available sliders');
+        console.log('/prompt - Display the current system prompt');
         return true;
     } else if (commandName === 'clear') {
         // Clear conversation history
@@ -253,6 +252,13 @@ function handleCommand(command: string): boolean {
         ara.sliders.forEach((slider, name) => {
             console.log(`${name}: ${slider.value}/${slider.max} - ${slider.description}`);
         });
+        return true;
+    } else if (commandName === 'prompt') {
+        // Display the current system prompt
+        console.log('\nCurrent System Prompt:');
+        console.log('====================');
+        console.log(ara.renderPrompt());
+        console.log('====================');
         return true;
     } else if (commandName === 'exit') {
         console.log('Goodbye!');
