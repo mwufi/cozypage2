@@ -171,6 +171,23 @@ def analyze_situation(context: AgentContext, conversation: CurrentConversation):
             logger.info(f"User is moderately engaged. Slightly increasing curiosity.")
             context.components["curiosity"].set(context.components["curiosity"].level + 0.1)
 
+
+agentLoop = {
+    "global_vars": {
+        "conversation": CurrentConversation(),
+        "agent": AgentContext()
+    },
+    "on_message": [
+        "build_system_prompt",
+        "get_response",
+        "analyze_situation", # sometimes, we want to analyze the situation and change the agent state
+        "update_agent_state"
+    ],
+    "on_init": [
+        "load_agent_state"
+    ]
+}
+
 # === Example Usage ===
 if __name__ == "__main__":
     c = CurrentConversation()
