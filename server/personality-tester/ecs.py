@@ -2,6 +2,8 @@
 
 from typing import List, Dict, Any
 
+from personality_tester.blocks.common.conversation import CurrentConversation
+
 # === Base Block ===
 class PromptBlock:
     def render(self) -> str:
@@ -93,6 +95,7 @@ def modulate_response(context: AgentContext, user_input: str) -> List[str]:
 
 # === Example Usage ===
 if __name__ == "__main__":
+    c = CurrentConversation()
     agent = AgentContext()
     agent.components["mood"].set("nostalgic")
     agent.components["playfulness"].set("high")
@@ -100,10 +103,46 @@ if __name__ == "__main__":
     agent.components["vulnerability"].toggle()
     agent.components["curiosity"].set(0.8)
 
-    print("=== Agent State ===")
-    print(agent.render())
+    def render_system_prompt(agent: AgentContext):
+        s = ""
+        s += ("=== Agent State ===")
+        s += agent.render()
 
-    print("\n=== Modulation Instructions ===")
-    user_input = "Tell me about your childhood."
-    for instr in modulate_response(agent, user_input):
-        print(f"- {instr}")
+        s += "\n=== Modulation Instructions ==="
+        user_input = "Tell me about your childhood."
+        for instr in modulate_response(agent, user_input):
+            s += f"- {instr}"
+
+        s += "\n=== Conversation History ==="
+        s += c.render()
+
+        return s
+
+    from personality_tester.ai import client
+    
+    while True:
+        system_message = render_system_prompt(agent)
+        
+        print("\nSystem Message:")
+        print(system_message)
+
+        # Get user input
+        user_input = input("You: ")
+        
+        # Check if user wants to exit
+        if user_input.lower() == "exit":
+            break
+        
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": user_input}
+            ]
+        )
+        
+        print(f"Assistant: {response.choices[0].message.content}")
+        c.add_message("user", user_input)
+        c.add_message("assistant", response.choices[0].message.content)
+        
+        print()
