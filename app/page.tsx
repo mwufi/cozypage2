@@ -1,25 +1,23 @@
 import Image from "next/image";
 import { loadConfiguration } from "@/app/landing/helpers";
+import HamburgerMenu from "@/app/HamburgerMenu";
 
 export default function Home() {
   // Load configuration for taglines
   const config = loadConfiguration();
 
   return (
-    <div className="min-h-screen bg-gradient-to-r from-[#0A0B2E] via-[#1D1F59] to-[#0A0B2E] relative overflow-hidden text-white font-sans">
+    <div className="min-h-screen bg-gradient-to-r from-[#0A0B2E] via-[#1D1F59] to-[#0A0B2E] relative overflow-hidden text-white font-sans m-3 rounded-3xl p-3">
       {/* Radial gradient decorations */}
       <div className="absolute top-1/4 left-1/4 w-[600px] h-[600px] bg-blue-500/10 rounded-full blur-3xl -z-10"></div>
       <div className="absolute bottom-1/3 right-1/3 w-[800px] h-[800px] bg-indigo-500/10 rounded-full blur-3xl -z-10"></div>
 
       {/* Navigation */}
       <nav className="flex justify-between items-center p-6">
-        <div className="text-2xl font-bold">Ara</div>
-        <div className="flex gap-8">
-          <a href="#features" className="uppercase text-sm tracking-wider hover:text-blue-300 transition-colors">Features</a>
-          <a href="#why" className="uppercase text-sm tracking-wider hover:text-blue-300 transition-colors">Why Ara</a>
-          <a href="#beta" className="uppercase text-sm tracking-wider hover:text-blue-300 transition-colors">Early Access</a>
-          <a href="#contact" className="uppercase text-sm tracking-wider hover:text-blue-300 transition-colors">Contact</a>
+        <div className="text-2xl font-bold">
+          Ara <span className="bg-gradient-to-r from-blue-400 via-indigo-500 to-violet-600 bg-clip-text text-transparent animate-gradient-x">Companion</span>
         </div>
+        <HamburgerMenu />
       </nav>
 
       <div className="max-w-6xl mx-auto px-6 py-24">
