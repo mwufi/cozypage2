@@ -1,6 +1,10 @@
 import Image from "next/image";
+import { loadConfiguration } from "@/app/landing/helpers";
 
 export default function Home() {
+  // Load configuration for taglines
+  const config = loadConfiguration();
+
   return (
     <div className="min-h-screen bg-gradient-to-r from-[#0A0B2E] via-[#1D1F59] to-[#0A0B2E] relative overflow-hidden text-white font-sans">
       {/* Radial gradient decorations */}
@@ -9,128 +13,202 @@ export default function Home() {
 
       {/* Navigation */}
       <nav className="flex justify-between items-center p-6">
-        <div className="text-2xl font-bold">ARA</div>
+        <div className="text-2xl font-bold">Ara</div>
         <div className="flex gap-8">
-          <a href="#" className="uppercase text-sm tracking-wider hover:text-blue-300 transition-colors">About</a>
-          <a href="#" className="uppercase text-sm tracking-wider hover:text-blue-300 transition-colors">Features</a>
-          <a href="#" className="uppercase text-sm tracking-wider hover:text-blue-300 transition-colors">Technology</a>
-          <a href="#" className="uppercase text-sm tracking-wider hover:text-blue-300 transition-colors">Contact</a>
+          <a href="#features" className="uppercase text-sm tracking-wider hover:text-blue-300 transition-colors">Features</a>
+          <a href="#why" className="uppercase text-sm tracking-wider hover:text-blue-300 transition-colors">Why Ara</a>
+          <a href="#beta" className="uppercase text-sm tracking-wider hover:text-blue-300 transition-colors">Early Access</a>
+          <a href="#contact" className="uppercase text-sm tracking-wider hover:text-blue-300 transition-colors">Contact</a>
         </div>
       </nav>
 
       <div className="max-w-6xl mx-auto px-6 py-24">
         {/* Hero Header */}
-        <header className="flex flex-col items-center mb-24 pt-20">
-          {/* <Image
-            className="mb-8"
-            src="/next.svg"
-            alt="Logo"
-            width={180}
-            height={38}
-            priority
-          /> */}
+        <header id="hero" className="flex flex-col items-center mb-24 pt-20">
           <h1 className="text-5xl md:text-7xl font-bold text-center leading-tight mb-8">
-            <span className="inline-block">ARA</span>
-            <span className="inline-block text-blue-300 mx-4">—</span>
-            <span className="inline-block">the</span>
-            <span className="inline-block italic text-blue-300 ml-4">future</span>
-            <br />
-            <span className="inline-block">of technology</span>
-            <span className="inline-block text-blue-300 italic ml-4">integration</span>
-            <span className="inline-block ml-2">is here</span>
+            <span className="inline-block text-blue-300">{config.tagline}</span>
           </h1>
 
+          <p className="text-xl text-white/80 text-center max-w-2xl mb-12">
+            {config.subtagline}
+          </p>
+
+          <div className="flex gap-6 flex-col sm:flex-row">
+            <a href="#beta" className="bg-blue-500 hover:bg-blue-600 transition-colors text-white px-8 py-3 rounded-full font-medium flex items-center justify-center">
+              Meet Your Ara
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 ml-2" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M12.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </a>
+            <a href="#demo" className="border border-white/30 hover:bg-white/10 transition-colors text-white px-8 py-3 rounded-full font-medium flex items-center justify-center">
+              Try the Demo
+            </a>
+          </div>
+
           {/* Search Bar Style Element */}
-          <div className="w-full max-w-2xl bg-white/10 backdrop-blur-md rounded-full p-2 pl-6 flex items-center mt-10 border border-white/20">
+          <div className="w-full max-w-2xl bg-white/10 backdrop-blur-md rounded-full p-2 pl-6 flex items-center mt-16 border border-white/20">
             <input
               type="text"
-              placeholder="Learn more about ARA..."
+              placeholder="Ask Ara anything..."
               className="bg-transparent flex-grow outline-none text-white placeholder-white/60"
             />
             <button className="bg-blue-500 hover:bg-blue-600 transition-colors text-white px-6 py-3 rounded-full">
-              Explore
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L12.586 11H5a1 1 0 110-2h7.586l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
             </button>
           </div>
         </header>
 
-        {/* Essay Content */}
-        <main className="prose prose-lg prose-invert mx-auto bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 shadow-xl p-8 md:p-12 max-w-4xl">
-          <section className="mb-12">
-            <h2 className="text-3xl font-bold text-blue-300 mb-6">Our Vision</h2>
-            <p className="mb-4 text-white/90">
-              ARA envisions a world where technology seamlessly integrates with human creativity,
-              enhancing our capabilities while preserving our autonomy and agency. We believe in
-              building tools that amplify human potential rather than replace it.
-            </p>
-            <p className="text-white/90">
-              In a rapidly evolving digital landscape, we stand for thoughtful innovation that
-              considers the broader implications of technology on society, culture, and individual
-              well-being.
-            </p>
-          </section>
+        {/* Section 1 - What Ara is */}
+        <section id="what" className="prose prose-lg prose-invert mx-auto bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 shadow-xl p-8 md:p-12 max-w-4xl mb-24">
+          <h2 className="text-3xl font-bold text-blue-300 mb-6 text-center">Your Life, Understood</h2>
+          <p className="mb-6 text-white/90 text-center">
+            Ara is your lifelong AI companion. It remembers your preferences, your projects, your people.
+            Unlike generic tools, Ara has memory, personality, and agency.
+          </p>
 
-          <section className="mb-12">
-            <h2 className="text-3xl font-bold text-blue-300 mb-6">Our Mission</h2>
-            <p className="mb-4 text-white/90">
-              At ARA, we're dedicated to developing accessible, responsible, and adaptable technologies
-              that empower people from all walks of life. Our mission is to bridge the gap between
-              cutting-edge innovation and practical, everyday utility.
-            </p>
-            <p className="text-white/90">
-              We commit to creating solutions that respect privacy, promote transparency, and
-              facilitate meaningful human connection in a world increasingly mediated by digital
-              interfaces.
-            </p>
-          </section>
+          <div className="grid md:grid-cols-3 gap-8 mt-12">
+            <div className="bg-white/5 p-6 rounded-xl border border-white/10">
+              <div className="text-blue-300 text-xl mb-3">A planner that nudges you kindly</div>
+              <p className="text-white/80 text-base">Ara keeps track of your goals and gently reminds you of priorities.</p>
+            </div>
+            <div className="bg-white/5 p-6 rounded-xl border border-white/10">
+              <div className="text-blue-300 text-xl mb-3">A friend who knows your taste</div>
+              <p className="text-white/80 text-base">Ara learns your preferences and tailors recommendations just for you.</p>
+            </div>
+            <div className="bg-white/5 p-6 rounded-xl border border-white/10">
+              <div className="text-blue-300 text-xl mb-3">A teammate who already read the brief</div>
+              <p className="text-white/80 text-base">Ara understands context and helps you move forward without repetition.</p>
+            </div>
+          </div>
 
-          <section className="mb-12">
-            <h2 className="text-3xl font-bold text-blue-300 mb-6">Our Approach</h2>
-            <p className="mb-4 text-white/90">
-              We believe in iterative development guided by real-world feedback. Our approach
-              combines rigorous research with practical application, ensuring that our products
-              not only push technological boundaries but also address genuine human needs.
-            </p>
-            <p className="text-white/90">
-              By fostering collaboration between diverse disciplines and perspectives, we create
-              holistic solutions that consider the full spectrum of human experience.
-            </p>
-          </section>
+          <p className="mt-10 text-white/90 text-center text-xl">
+            It's not "just another chatbot." It's an agent built around <span className="text-blue-300">you</span>.
+          </p>
+        </section>
 
-          <section>
-            <h2 className="text-3xl font-bold text-blue-300 mb-6">Join Our Journey</h2>
-            <p className="mb-4 text-white/90">
-              ARA is more than just a technology initiative—it's a community of forward-thinking
-              individuals committed to shaping a more thoughtful, inclusive digital future. Whether
-              you're a developer, designer, researcher, or simply someone passionate about the
-              potential of technology to improve lives, there's a place for you in our story.
+        {/* Section 2 - Core Features */}
+        <section id="features" className="prose prose-lg prose-invert mx-auto bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 shadow-xl p-8 md:p-12 max-w-4xl mb-24">
+          <h2 className="text-3xl font-bold text-blue-300 mb-6 text-center">Built for Real Life</h2>
+          <p className="mb-10 text-white/90 text-center">
+            Ara works across your digital life, so you can stop switching tabs and start moving forward.
+          </p>
+
+          <div className="space-y-6">
+            <div className="flex items-start">
+              <div className="bg-blue-500/20 p-2 rounded mr-4 flex-shrink-0 mt-1">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-300" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-white mb-2">Skills & Workflows</h3>
+                <p className="text-white/80">Give Ara simple natural-language playbooks</p>
+              </div>
+            </div>
+
+            <div className="flex items-start">
+              <div className="bg-blue-500/20 p-2 rounded mr-4 flex-shrink-0 mt-1">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-300" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-white mb-2">Long-Term Memory</h3>
+                <p className="text-white/80">Ara remembers files, names, and preferences</p>
+              </div>
+            </div>
+
+            <div className="flex items-start">
+              <div className="bg-blue-500/20 p-2 rounded mr-4 flex-shrink-0 mt-1">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-300" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-white mb-2">Integrations</h3>
+                <p className="text-white/80">Connect email, calendar, Slack, and more</p>
+              </div>
+            </div>
+
+            <div className="flex items-start">
+              <div className="bg-blue-500/20 p-2 rounded mr-4 flex-shrink-0 mt-1">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-300" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-white mb-2">Inbox for AI</h3>
+                <p className="text-white/80">Others can message your Ara. Let it handle the back-and-forth.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Section 3 - Why It's Different */}
+        <section id="why" className="prose prose-lg prose-invert mx-auto bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 shadow-xl p-8 md:p-12 max-w-4xl mb-24">
+          <h2 className="text-3xl font-bold text-blue-300 mb-6 text-center">Most AI tools answer. Ara asks.</h2>
+          <p className="mb-6 text-white/90 text-center">
+            Ara is goal-aware, emotionally intelligent, and curious about you. It adapts—whether you want a serious assistant,
+            a cozy companion, or something in between.
+          </p>
+
+          <div className="bg-gradient-to-r from-blue-500/20 to-purple-500/20 p-8 rounded-xl border border-white/10 my-10">
+            <p className="text-white text-center text-2xl font-light italic">
+              "Every Ara is unique. Because every person is."
             </p>
-            <p className="text-white/90">
-              Together, we can build technologies that honor human values while expanding the
-              horizons of what's possible.
-            </p>
-          </section>
-        </main>
+          </div>
+        </section>
+
+        {/* Section 4 - For Early Explorers */}
+        <section id="beta" className="prose prose-lg prose-invert mx-auto bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 shadow-xl p-8 md:p-12 max-w-4xl mb-24">
+          <h2 className="text-3xl font-bold text-blue-300 mb-6 text-center">This is just the beginning.</h2>
+          <p className="mb-6 text-white/90 text-center">
+            We're building a new category: AI that grows with you, protects your time, and feels less like a tool—and more like a partner.
+          </p>
+          <p className="mb-10 text-white/90 text-center">
+            Early adopters shape Ara's future. Want in?
+          </p>
+
+          <div className="flex gap-6 justify-center flex-col sm:flex-row">
+            <a href="#beta-signup" className="bg-blue-500 hover:bg-blue-600 transition-colors text-white px-8 py-3 rounded-full font-medium flex items-center justify-center">
+              Join the Private Beta
+            </a>
+            <a href="#demo" className="border border-white/30 hover:bg-white/10 transition-colors text-white px-8 py-3 rounded-full font-medium flex items-center justify-center">
+              See What Ara Can Do
+            </a>
+          </div>
+        </section>
 
         {/* Footer */}
-        <footer className="mt-24 text-center text-white/60 border-t border-white/10 pt-8">
+        <footer id="contact" className="mt-24 text-center text-white/60 border-t border-white/10 pt-8">
+          <p className="text-xl mb-6 max-w-2xl mx-auto">
+            You're not just getting an app. You're meeting a presence.
+            <span className="block mt-2 text-white/80">Personal, proactive, and a little bit magical.</span>
+          </p>
+
+          <p className="text-2xl font-bold mb-3 text-blue-300">Ara. {config.tagline}</p>
+          <p className="mb-10">Let's build something unforgettable.</p>
+
           <div className="flex justify-center gap-8 mb-6">
             <a
               href="#"
               className="text-blue-300 hover:text-white transition-colors"
             >
-              Learn More
+              About Us
             </a>
             <a
               href="#"
               className="text-blue-300 hover:text-white transition-colors"
             >
-              Contact Us
+              Privacy
             </a>
             <a
               href="#"
               className="text-blue-300 hover:text-white transition-colors"
             >
-              Join ARA
+              Contact
             </a>
           </div>
           <div className="flex justify-center gap-2 mb-4">
@@ -152,7 +230,7 @@ export default function Home() {
               </svg>
             </button>
           </div>
-          <p>© {new Date().getFullYear()} ARA. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} Ara AI. All rights reserved.</p>
         </footer>
       </div>
     </div>
