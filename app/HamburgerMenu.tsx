@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from "react";
+import Link from "next/link";
 
 export default function HamburgerMenu() {
     const [isOpen, setIsOpen] = useState(false);
@@ -13,6 +14,7 @@ export default function HamburgerMenu() {
         { href: "#features", label: "Features" },
         { href: "#why", label: "Why Ara" },
         { href: "#beta", label: "Early Access" },
+        { href: "/demo", label: "Demo", isPage: true },
         { href: "#contact", label: "Contact" },
     ];
 
@@ -21,13 +23,23 @@ export default function HamburgerMenu() {
             {/* Desktop menu */}
             <div className="hidden md:flex gap-8">
                 {menuItems.map((item) => (
-                    <a
-                        key={item.href}
-                        href={item.href}
-                        className="uppercase text-sm tracking-wider hover:text-blue-300 transition-colors"
-                    >
-                        {item.label}
-                    </a>
+                    item.isPage ? (
+                        <Link
+                            key={item.href}
+                            href={item.href}
+                            className="uppercase text-sm tracking-wider hover:text-blue-300 transition-colors"
+                        >
+                            {item.label}
+                        </Link>
+                    ) : (
+                        <a
+                            key={item.href}
+                            href={item.href}
+                            className="uppercase text-sm tracking-wider hover:text-blue-300 transition-colors"
+                        >
+                            {item.label}
+                        </a>
+                    )
                 ))}
             </div>
 
@@ -78,14 +90,25 @@ export default function HamburgerMenu() {
                     </button>
                     <div className="flex flex-col items-center gap-8">
                         {menuItems.map((item) => (
-                            <a
-                                key={item.href}
-                                href={item.href}
-                                className="uppercase text-xl tracking-wider hover:text-blue-300 transition-colors"
-                                onClick={toggleMenu}
-                            >
-                                {item.label}
-                            </a>
+                            item.isPage ? (
+                                <Link
+                                    key={item.href}
+                                    href={item.href}
+                                    className="uppercase text-xl tracking-wider hover:text-blue-300 transition-colors"
+                                    onClick={toggleMenu}
+                                >
+                                    {item.label}
+                                </Link>
+                            ) : (
+                                <a
+                                    key={item.href}
+                                    href={item.href}
+                                    className="uppercase text-xl tracking-wider hover:text-blue-300 transition-colors"
+                                    onClick={toggleMenu}
+                                >
+                                    {item.label}
+                                </a>
+                            )
                         ))}
                     </div>
                 </div>
