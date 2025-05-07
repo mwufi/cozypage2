@@ -68,6 +68,12 @@ export default function Home() {
               <Link href="/demo" className="border border-white/30 hover:bg-white/10 transition-colors text-white px-8 py-3 rounded-full font-medium flex items-center justify-center hover:scale-105 transition-transform">
                 Try the Demo
               </Link>
+              <Link href="/chatlab" className="border border-purple-500/30 hover:bg-purple-500/10 transition-colors text-white px-8 py-3 rounded-full font-medium flex items-center justify-center hover:scale-105 transition-transform">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                </svg>
+                ChatLab
+              </Link>
             </div>
           </ScaleUp>
 
@@ -201,6 +207,9 @@ export default function Home() {
               </a>
               <Link href="/demo" className="border border-white/30 hover:bg-white/10 transition-colors text-white px-8 py-3 rounded-full font-medium flex items-center justify-center hover:scale-105 transition-transform">
                 See What Ara Can Do
+              </Link>
+              <Link href="/chatlab" className="border border-purple-500/30 hover:bg-purple-500/10 transition-colors text-white px-8 py-3 rounded-full font-medium flex items-center justify-center hover:scale-105 transition-transform">
+                Try ChatLab
               </Link>
             </div>
           </ScaleUp>
