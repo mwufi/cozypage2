@@ -7,6 +7,7 @@ from pydantic import BaseModel
 import requests
 import uvicorn
 from starlette.middleware.sessions import SessionMiddleware
+from fastapi.middleware.cors import CORSMiddleware
 
 import google.oauth2.credentials
 import google_auth_oauthlib.flow
@@ -23,7 +24,22 @@ DRIVE_API_VERSION = 'v2'
 CALENDAR_API_SERVICE_NAME = 'calendar'
 CALENDAR_API_VERSION = 'v3'
 
+# CORS origins - adjust as needed for production
+origins = [
+    "http://localhost:3000",  # Assuming Next.js runs on port 3000
+    "http://localhost:8000",  # For the FastAPI app itself if it makes requests to itself
+]
+
 app = FastAPI(title="Mail API with Google OAuth")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.add_middleware(
     SessionMiddleware, 
     secret_key=os.getenv("SECRET_KEY", "REPLACE_THIS_WITH_A_REAL_SECRET_KEY")
