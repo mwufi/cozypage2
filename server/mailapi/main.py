@@ -1,8 +1,11 @@
 import os
+import jwt # For JWT
+from datetime import datetime, timedelta # For JWT expiry
 from typing import Dict, Optional, List
-from fastapi import FastAPI, Request, Depends, HTTPException, status
-from fastapi.responses import RedirectResponse, HTMLResponse
-from fastapi.security import OAuth2AuthorizationCodeBearer
+
+from fastapi import FastAPI, Request, Depends, HTTPException, status, Response as FastAPIResponse # Added Response
+from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse
+from fastapi.security import OAuth2PasswordBearer, HTTPAuthorizationCredentials, HTTPBearer # For JWT validation
 from pydantic import BaseModel
 import requests
 import uvicorn
@@ -16,6 +19,8 @@ import googleapiclient.discovery
 # OAuth2 configuration
 CLIENT_SECRETS_FILE = "client_secret.json"
 SCOPES = [
+    'https://www.googleapis.com/auth/userinfo.email', # Request email to identify user
+    'https://www.googleapis.com/auth/userinfo.profile',
     'https://www.googleapis.com/auth/drive.metadata.readonly',
     'https://www.googleapis.com/auth/calendar.readonly'
 ]
@@ -24,13 +29,22 @@ DRIVE_API_VERSION = 'v2'
 CALENDAR_API_SERVICE_NAME = 'calendar'
 CALENDAR_API_VERSION = 'v3'
 
+# JWT Settings
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-super-secret-jwt-key-please-change") # Load from env
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # 1 day, for example
+
+# Environment-dependent URLs
+FRONTEND_APP_URL = os.getenv("FRONTEND_APP_URL", "http://localhost:3000")
+BACKEND_BASE_URL = os.getenv("BACKEND_BASE_URL", "http://localhost:8000")
+
 # CORS origins - adjust as needed for production
 origins = [
     "http://localhost:3000",  # Assuming Next.js runs on port 3000
     "http://localhost:8000",  # For the FastAPI app itself if it makes requests to itself
 ]
 
-app = FastAPI(title="Mail API with Google OAuth")
+app = FastAPI(title="Mail API with Google OAuth and JWT")
 
 app.add_middleware(
     CORSMiddleware,
@@ -42,7 +56,7 @@ app.add_middleware(
 
 app.add_middleware(
     SessionMiddleware, 
-    secret_key=os.getenv("SECRET_KEY", "REPLACE_THIS_WITH_A_REAL_SECRET_KEY")
+    secret_key=os.getenv("SESSION_SECRET_KEY", "your-session-secret-key-please-change")
 )
 
 class CredentialsModel(BaseModel):
@@ -57,214 +71,204 @@ class FeaturesModel(BaseModel):
     drive: bool
     calendar: bool
 
-@app.get("/", response_class=HTMLResponse)
-async def index():
-    return get_index_html()
+class TokenData(BaseModel):
+    user_email: Optional[str] = None
+
+class User(BaseModel):
+    email: str
+    # Add other user fields if needed
+
+# In-memory store for Google tokens (replace with DB in production)
+# Key: user_email, Value: dict of google tokens
+google_user_tokens_db: Dict[str, dict] = {}
+
+# JWT Utilities
+security = HTTPBearer()
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> User:
+    token = credentials.credentials
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
+        user_email: str = payload.get("sub") # Assuming "sub" (subject) is the user_email
+        if user_email is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Could not validate credentials - user_email missing",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        token_data = TokenData(user_email=user_email)
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except jwt.PyJWTError as e:
+        print(f"JWT Error: {e}") # Log the specific JWT error
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Could not validate credentials - JWT error: {e}",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return User(email=token_data.user_email)
+
+def get_google_flow(state: Optional[str] = None) -> google_auth_oauthlib.flow.Flow:
+    flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(
+        CLIENT_SECRETS_FILE, 
+        scopes=SCOPES,
+        state=state
+    )
+    flow.redirect_uri = f"{BACKEND_BASE_URL}/auth/google/callback" # Crucial: Google redirects here
+    return flow
+
+@app.get("/auth/google/login")
+async def auth_google_login(request: Request):
+    flow = get_google_flow()
+    authorization_url, state = flow.authorization_url(
+        access_type="offline", 
+        include_granted_scopes="true",
+        prompt="consent" # Force consent screen for refresh token if needed
+    )
+    request.session["oauth_state"] = state # Store state in session
+    return RedirectResponse(authorization_url)
+
+@app.get("/auth/google/callback")
+async def auth_google_callback(request: Request, code: str, state: str):
+    stored_state = request.session.pop("oauth_state", None)
+    if not stored_state or stored_state != state:
+        return JSONResponse({"error": "State mismatch"}, status_code=status.HTTP_400_BAD_REQUEST)
+
+    flow = get_google_flow(state=state)
+    try:
+        flow.fetch_token(code=code)
+    except Exception as e:
+        print(f"Error fetching Google token: {e}")
+        return JSONResponse({"error": "Failed to fetch Google token"}, status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    credentials = flow.credentials
+    
+    # Get user info from Google to use as an identifier (email)
+    userinfo_service = googleapiclient.discovery.build("oauth2", "v2", credentials=credentials)
+    user_info = userinfo_service.userinfo().get().execute()
+    user_email = user_info.get("email")
+
+    if not user_email:
+        return JSONResponse({"error": "Could not retrieve user email from Google"}, status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    # Store Google tokens (access, refresh, etc.) associated with the user_email
+    google_user_tokens_db[user_email] = {
+        'token': credentials.token,
+        'refresh_token': credentials.refresh_token,
+        'token_uri': credentials.token_uri,
+        'client_id': credentials.client_id,
+        'client_secret': credentials.client_secret,
+        'scopes': credentials.scopes
+    }
+
+    # Create JWT for our frontend
+    jwt_payload = {"sub": user_email} # "sub" is standard for subject (user identifier)
+    app_jwt = create_access_token(data=jwt_payload)
+
+    # Redirect to frontend callback with JWT
+    frontend_callback_url = f"{FRONTEND_APP_URL}/auth/callback?jwt={app_jwt}"
+    return RedirectResponse(frontend_callback_url)
 
 @app.get("/drive")
-async def drive_api_request(request: Request):
-    if "credentials" not in request.session:
-        return RedirectResponse(url="/authorize")
+async def drive_api_request(current_user: User = Depends(get_current_user)):
+    user_email = current_user.email
+    user_google_tokens = google_user_tokens_db.get(user_email)
 
-    features = request.session["features"]
+    if not user_google_tokens:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User Google tokens not found. Please re-authenticate.")
 
-    if features["drive"]:
-        # Load credentials from the session
-        credentials = google.oauth2.credentials.Credentials(
-            **request.session["credentials"]
-        )
+    credentials = google.oauth2.credentials.Credentials(**user_google_tokens)
+    
+    # Check if token needs refresh (simplified check, Google library often handles this)
+    if credentials.expired and credentials.refresh_token:
+        try:
+            credentials.refresh(google.auth.transport.requests.Request())
+            # Update stored tokens after refresh
+            google_user_tokens_db[user_email] = credentials_to_dict(credentials)
+        except Exception as e:
+            print(f"Error refreshing Google token for {user_email}: {e}")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Failed to refresh Google token. Please re-authenticate.")
 
-        drive = googleapiclient.discovery.build(
-            DRIVE_API_SERVICE_NAME, DRIVE_API_VERSION, credentials=credentials
-        )
-
+    drive = googleapiclient.discovery.build(
+        DRIVE_API_SERVICE_NAME, DRIVE_API_VERSION, credentials=credentials
+    )
+    try:
         files = drive.files().list().execute()
-
-        # Save credentials back to session in case access token was refreshed
-        request.session["credentials"] = credentials_to_dict(credentials)
-
         return files
-    else:
-        return {"error": "Drive feature is not enabled."}
+    except Exception as e:
+        print(f"Google Drive API error for {user_email}: {e}")
+        # Check for specific auth errors from Google API call
+        if "invalid_grant" in str(e).lower() or "token has been expired or revoked" in str(e).lower():
+             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Google token invalid or revoked. Please re-authenticate.")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error accessing Google Drive: {str(e)}")
 
 @app.get("/calendar")
-async def calendar_api_request(request: Request):
-    if "credentials" not in request.session:
-        return RedirectResponse(url="/authorize")
+async def calendar_api_request(current_user: User = Depends(get_current_user)):
+    user_email = current_user.email
+    user_google_tokens = google_user_tokens_db.get(user_email)
 
-    features = request.session["features"]
+    if not user_google_tokens:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User Google tokens not found. Please re-authenticate.")
 
-    if features["calendar"]:
-        # Load credentials from the session
-        credentials = google.oauth2.credentials.Credentials(
-            **request.session["credentials"]
-        )
+    credentials = google.oauth2.credentials.Credentials(**user_google_tokens)
+    if credentials.expired and credentials.refresh_token:
+        try:
+            credentials.refresh(google.auth.transport.requests.Request())
+            google_user_tokens_db[user_email] = credentials_to_dict(credentials)
+        except Exception as e:
+            print(f"Error refreshing Google token for {user_email}: {e}")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Failed to refresh Google token. Please re-authenticate.")
 
-        calendar = googleapiclient.discovery.build(
-            CALENDAR_API_SERVICE_NAME, CALENDAR_API_VERSION, credentials=credentials
-        )
-
-        # Get list of calendars
+    calendar = googleapiclient.discovery.build(
+        CALENDAR_API_SERVICE_NAME, CALENDAR_API_VERSION, credentials=credentials
+    )
+    try:
         calendar_list = calendar.calendarList().list().execute()
-
-        # Save credentials back to session in case access token was refreshed
-        request.session["credentials"] = credentials_to_dict(credentials)
-
         return calendar_list
-    else:
-        return {"error": "Calendar feature is not enabled."}
-
-@app.get("/authorize")
-async def authorize(request: Request):
-    # Create flow instance to manage the OAuth 2.0 Authorization Grant Flow steps
-    flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(
-        CLIENT_SECRETS_FILE, scopes=SCOPES
-    )
-
-    # The URI must exactly match one of the authorized redirect URIs for the OAuth 2.0 client
-    flow.redirect_uri = f"{request.base_url.scheme}://{request.base_url.netloc}/oauth2callback"
-
-    authorization_url, state = flow.authorization_url(
-        # Enable offline access so that you can refresh an access token without
-        # re-prompting the user for permission
-        access_type="offline",
-        # Enable incremental authorization
-        include_granted_scopes="true",
-    )
-
-    # Store the state so the callback can verify the auth server response
-    request.session["state"] = state
-
-    return RedirectResponse(url=authorization_url)
-
-@app.get("/oauth2callback")
-async def oauth2callback(request: Request):
-    # Verify state parameter
-    if "state" not in request.session:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="State parameter missing"
-        )
-    
-    state = request.session["state"]
-
-    flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(
-        CLIENT_SECRETS_FILE, scopes=SCOPES, state=state
-    )
-    flow.redirect_uri = f"{request.base_url.scheme}://{request.base_url.netloc}/oauth2callback"
-
-    # Use the authorization server's response to fetch the OAuth 2.0 tokens
-    authorization_response = str(request.url)
-    flow.fetch_token(authorization_response=authorization_response)
-
-    # Store credentials in the session
-    credentials = flow.credentials
-    credentials_dict = credentials_to_dict(credentials)
-    request.session["credentials"] = credentials_dict
-
-    # Check which scopes user granted
-    features = check_granted_scopes(credentials_dict)
-    request.session["features"] = features
-    
-    return RedirectResponse(url="/")
-
-@app.get("/revoke")
-async def revoke(request: Request):
-    if "credentials" not in request.session:
-        return HTMLResponse(
-            'You need to <a href="/authorize">authorize</a> before testing the code to revoke credentials.'
-        )
-
-    credentials = google.oauth2.credentials.Credentials(
-        **request.session["credentials"]
-    )
-
-    revoke_response = requests.post(
-        "https://oauth2.googleapis.com/revoke",
-        params={"token": credentials.token},
-        headers={"content-type": "application/x-www-form-urlencoded"},
-    )
-
-    status_code = revoke_response.status_code
-    if status_code == 200:
-        return HTMLResponse(f'Credentials successfully revoked.<br><br>{get_index_html()}')
-    else:
-        return HTMLResponse(f'An error occurred.<br><br>{get_index_html()}')
-
-@app.get("/clear")
-async def clear_credentials(request: Request):
-    if "credentials" in request.session:
-        del request.session["credentials"]
-    return HTMLResponse(f'Credentials have been cleared.<br><br>{get_index_html()}')
+    except Exception as e:
+        print(f"Google Calendar API error for {user_email}: {e}")
+        if "invalid_grant" in str(e).lower() or "token has been expired or revoked" in str(e).lower():
+             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Google token invalid or revoked. Please re-authenticate.")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error accessing Google Calendar: {str(e)}")
 
 def credentials_to_dict(credentials):
     return {
-        "token": credentials.token,
-        "refresh_token": credentials.refresh_token,
-        "token_uri": credentials.token_uri,
-        "client_id": credentials.client_id,
-        "client_secret": credentials.client_secret,
-        "granted_scopes": credentials.scopes if hasattr(credentials, 'scopes') else [],
+        'token': credentials.token,
+        'refresh_token': credentials.refresh_token,
+        'token_uri': credentials.token_uri,
+        'client_id': credentials.client_id,
+        'client_secret': credentials.client_secret,
+        'scopes': credentials.scopes
     }
 
-def check_granted_scopes(credentials):
-    features = {}
-    granted_scopes = credentials.get("granted_scopes", [])
-    
-    if isinstance(granted_scopes, str):
-        granted_scopes = granted_scopes.split()
-    
-    features["drive"] = 'https://www.googleapis.com/auth/drive.metadata.readonly' in granted_scopes
-    features["calendar"] = 'https://www.googleapis.com/auth/calendar.readonly' in granted_scopes
-    
-    return features
-
-def get_index_html():
-    return """
-    <html>
-    <head>
-        <title>Google API FastAPI Demo</title>
-        <style>
-            body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
-            table { border-collapse: collapse; width: 100%; }
-            td { padding: 10px; border: 1px solid #ddd; }
-            a { color: #4285f4; text-decoration: none; }
-            a:hover { text-decoration: underline; }
-        </style>
-    </head>
-    <body>
-        <h1>Google API Integration Demo</h1>
-        <table>
-            <tr>
-                <td><a href="/drive">Test Drive API</a></td>
-                <td>Access your Google Drive files metadata</td>
-            </tr>
-            <tr>
-                <td><a href="/calendar">Test Calendar API</a></td>
-                <td>Access your Google Calendar data</td>
-            </tr>
-            <tr>
-                <td><a href="/authorize">Authorize</a></td>
-                <td>Start the authorization flow to grant access to your Google account</td>
-            </tr>
-            <tr>
-                <td><a href="/revoke">Revoke Credentials</a></td>
-                <td>Revoke the current access token</td>
-            </tr>
-            <tr>
-                <td><a href="/clear">Clear Session</a></td>
-                <td>Clear the credentials stored in the current session</td>
-            </tr>
-        </table>
-    </body>
-    </html>
-    """
+@app.get("/", response_class=HTMLResponse)
+async def root_redirect_to_login():
+    # Simple page, or redirect to frontend, or provide API docs link
+    return HTMLResponse(
+        """<html><body><h1>FastAPI Google Auth Backend</h1>
+        <p><a href=\"/auth/google/login\">Login with Google (Test Backend Flow)</a></p>
+        <p>This backend issues JWTs to a configured frontend. Access protected APIs like /drive or /calendar with a Bearer JWT.</p>
+        </body></html>"""
+    )
 
 if __name__ == "__main__":
-    # When running locally, disable OAuthlib's HTTPs verification
-    os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
-    
-    # This disables the requested scopes and granted scopes check
+    print(f"JWT_SECRET_KEY: {JWT_SECRET_KEY[:10]}... (ensure this is set securely in prod)")
+    print(f"FRONTEND_APP_URL: {FRONTEND_APP_URL}")
+    print(f"BACKEND_BASE_URL: {BACKEND_BASE_URL}")
+    os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1" # For local dev over HTTP
     os.environ["OAUTHLIB_RELAX_TOKEN_SCOPE"] = "1"
-    
     uvicorn.run("main:app", host="localhost", port=8000, reload=True)

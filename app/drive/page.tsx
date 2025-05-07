@@ -1,30 +1,22 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import DriveFileList from '@/components/DriveFileList'; // Assuming this path
-
-// Define a basic type for the file structure based on your example
-// You might want to make this more comprehensive
-export interface DriveFile {
-    id: string;
-    title: string;
-    mimeType: string;
-    modifiedDate: string;
-    alternateLink: string;
-    iconLink: string;
-    fileSize?: string; // Optional as it might not always be present for Google Docs etc.
-    ownerNames?: string[];
-}
+import DriveFileList, { DriveFile } from '@/components/DriveFileList';
+import Link from 'next/link';
 
 interface DriveApiResponse {
-    items: DriveFile[];
-    // Add other fields from the API response if needed
+    items?: DriveFile[];
+    error?: string;
 }
+
+const PYTHON_BACKEND_URL = process.env.NEXT_PUBLIC_PYTHON_BACKEND_URL || 'http://localhost:8000';
+const GOOGLE_LOGIN_URL = `${PYTHON_BACKEND_URL}/auth/google/login`;
 
 export default function DrivePage() {
     const [files, setFiles] = useState<DriveFile[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
 
     useEffect(() => {
         async function fetchDriveFiles() {
@@ -32,22 +24,27 @@ export default function DrivePage() {
             setError(null);
             try {
                 const response = await fetch('/api/drive');
-                if (!response.ok) {
-                    if (response.status === 401) { // Unauthorized
-                        // Attempt to redirect to Python backend authorize URL
-                        // This assumes your Python backend is running on localhost:8000
-                        // and its /authorize endpoint initiates the Google OAuth flow.
-                        window.location.href = 'http://localhost:8000/authorize';
-                        return; // Stop further processing as we are redirecting
-                    }
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || `Error: ${response.status}`);
+
+                if (response.status === 401) {
+                    setIsAuthenticated(false);
+                    setError('Authentication required. Please login.');
+                    setIsLoading(false);
+                    return;
                 }
+
                 const data: DriveApiResponse = await response.json();
+
+                if (!response.ok) {
+                    setIsAuthenticated(false);
+                    throw new Error(data.error || `Error: ${response.status}`);
+                }
+
                 setFiles(data.items || []);
+                setIsAuthenticated(true);
             } catch (err: any) {
                 console.error('Failed to fetch drive files:', err);
                 setError(err.message || 'Failed to load files. Please try again.');
+                setIsAuthenticated(false);
             }
             setIsLoading(false);
         }
@@ -55,36 +52,44 @@ export default function DrivePage() {
         fetchDriveFiles();
     }, []);
 
-    if (isLoading) {
+    if (isLoading || isAuthenticated === null) {
         return (
             <div className="flex justify-center items-center h-screen">
-                <p className="text-lg text-gray-600">Loading Drive files...</p>
-                {/* You can add a spinner component here */}
+                <p className="text-lg text-gray-600">Loading...</p>
             </div>
         );
     }
 
-    if (error) {
+    if (!isAuthenticated || error) {
         return (
             <div className="flex flex-col justify-center items-center h-screen p-4">
-                <p className="text-red-500 text-lg mb-4">{error}</p>
-                <button
-                    onClick={() => window.location.href = 'http://localhost:8000/authorize'}
-                    className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                <p className="text-red-500 text-lg mb-4">
+                    {error || 'You are not authorized to view this page. Please login.'}
+                </p>
+                <a
+                    href={GOOGLE_LOGIN_URL}
+                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-lg font-semibold shadow-md"
                 >
                     Login with Google
-                </button>
+                </a>
             </div>
         );
     }
 
     return (
         <div className="container mx-auto p-4">
-            <h1 className="text-3xl font-bold mb-6 text-gray-800">Your Google Drive Files</h1>
+            <div className="flex justify-between items-center mb-6">
+                <h1 className="text-3xl font-bold text-gray-800">Your Google Drive Files</h1>
+                <Link href="/api/auth/logout" legacyBehavior>
+                    <a className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors">
+                        Logout
+                    </a>
+                </Link>
+            </div>
             {files.length > 0 ? (
                 <DriveFileList files={files} />
             ) : (
-                <p className="text-gray-600">No files found or you may need to authorize access.</p>
+                <p className="text-gray-600">No files found in your Google Drive.</p>
             )}
         </div>
     );

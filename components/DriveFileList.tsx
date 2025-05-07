@@ -1,6 +1,6 @@
 'use client';
 
-import { DriveFile } from '@/app/drive/page'; // Adjust the import path as needed
+// import { DriveFile } from '@/app/drive/page'; // No longer import from page
 import {
     Table,
     TableBody,
@@ -9,8 +9,20 @@ import {
     TableHead,
     TableHeader,
     TableRow,
-} from "@/components/ui/table"; // Path to your shadcn table component
+} from "@/components/ui/table";
 import Image from 'next/image';
+
+// Define and Export DriveFile interface here
+export interface DriveFile {
+    id: string;
+    title: string;
+    mimeType: string;
+    modifiedDate: string;
+    alternateLink: string;
+    iconLink: string;
+    fileSize?: string;
+    ownerNames?: string[];
+}
 
 interface DriveFileListProps {
     files: DriveFile[];
