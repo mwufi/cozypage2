@@ -27,13 +27,28 @@ function base64UrlDecode(str: string): string {
         // Replace Base64URL specific characters
         let base64 = str.replace(/-/g, '+').replace(/_/g, '/');
         // Pad with '=' characters if necessary
-        while (base64.length % 4) {
-            base64 += '=';
+        // The atob function decodes a base-64 encoded string.
+        // The result is a binary string.
+        const binaryString = atob(base64);
+        // Convert binary string to Uint8Array
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
         }
-        return atob(base64);
+        // Use TextDecoder to decode UTF-8 bytes into a JavaScript string
+        return new TextDecoder('utf-8').decode(bytes);
     } catch (e) {
-        console.error("Base64Url decoding failed:", e);
-        return ""; // Or handle error appropriately
+        console.error("Base64Url decoding or UTF-8 decoding failed:", e);
+        // Attempt to return the original string if decoding fails, or a specific error message
+        // This might happen if the content wasn't actually UTF-8 encoded base64.
+        // For robustness, one might try other decodings or return the raw atob() output
+        // but for most modern emails, UTF-8 is expected.
+        try {
+            return atob(str.replace(/-/g, '+').replace(/_/g, '/')); // Fallback to raw atob if TextDecoder fails
+        } catch (innerE) {
+            return "[Content decoding error]";
+        }
     }
 }
 
