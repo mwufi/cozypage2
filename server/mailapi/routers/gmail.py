@@ -299,47 +299,114 @@ async def create_draft_reply(
         print(f"General error creating reply draft for {original_message_id}: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
 
-@router.get("/threads")
+# New Pydantic model for enriched thread list item
+class EnrichedThread(BaseModel):
+    id: str
+    snippet: str
+    historyId: str
+    # Added fields from latest message
+    latest_message_subject: Optional[str] = None
+    latest_message_from: Optional[str] = None
+    latest_message_date: Optional[str] = None # Store as string for simplicity, frontend can parse
+    # latest_message_timestamp: Optional[int] = None # Or store timestamp
+    # message_count: Optional[int] = None # threads.get needed for reliable count
+    # has_draft: Optional[bool] = None # Requires separate check
+
+class EnrichedThreadsListResponse(BaseModel):
+    threads: List[EnrichedThread]
+    nextPageToken: Optional[str] = None
+    resultSizeEstimate: Optional[int] = None
+    labelIdsApplied: Optional[List[str]] = None
+
+@router.get("/threads", response_model=EnrichedThreadsListResponse)
 async def list_threads(
     credentials: google.oauth2.credentials.Credentials = Depends(get_refreshed_google_credentials),
-    label_ids: Optional[List[str]] = Query(None), # Allow filtering by labels
+    label_ids: Optional[List[str]] = Query(None), 
     max_results: int = Query(25, ge=1, le=100),
     page_token: Optional[str] = Query(None)
 ):
-    """Lists threads, optionally filtered by labels."""
+    """Lists threads with enriched data for the latest message."""
     gmail_service = googleapiclient.discovery.build(GMAIL_API_SERVICE_NAME, GMAIL_API_VERSION, credentials=credentials)
     try:
         thread_list_query = gmail_service.users().threads().list(
             userId='me',
             maxResults=max_results,
             pageToken=page_token,
-            labelIds=label_ids # Pass label_ids if provided
+            labelIds=label_ids 
         )
         results = await run_in_threadpool(thread_list_query.execute)
         
-        threads = results.get('threads', [])
+        basic_threads = results.get('threads', [])
         next_page_token = results.get('nextPageToken')
         result_size_estimate = results.get('resultSizeEstimate')
 
-        # Note: Each thread object only contains id, snippet, historyId.
-        # For a richer list view (subject, senders), we'd need to fetch details for each thread,
-        # potentially the latest message using threads.get(id, format='metadata') for each.
-        # This can be slow. Consider if the snippet is enough for the list view initially.
+        enriched_threads = []
+        if basic_threads:
+            # Prepare batch request to get metadata for the latest message of each thread
+            batch = gmail_service.new_batch_http_request()
+            latest_message_data_map = {}
 
-        return {
-            "threads": threads,
-            "nextPageToken": next_page_token,
-            "resultSizeEstimate": result_size_estimate,
-            "labelIdsApplied": label_ids # Echo back applied labels
-        }
+            def _create_thread_get_callback(thread_id):
+                def callback(request_id, response, exception):
+                    if exception:
+                        print(f"Error fetching thread details for {thread_id} during list enrichment: {exception}")
+                        # Store error or empty data? Decide on error handling for enrichment.
+                        latest_message_data_map[thread_id] = {'error': True}
+                    else:
+                        # Get the *last* message from the thread's message list
+                        last_message = response.get('messages', [])[-1] if response.get('messages') else None
+                        if last_message and last_message.get('payload'):
+                            headers = last_message.get('payload', {}).get('headers', [])
+                            subject = next((h['value'] for h in headers if h['name'].lower() == 'subject'), '')
+                            from_sender = next((h['value'] for h in headers if h['name'].lower() == 'from'), '')
+                            date_str = next((h['value'] for h in headers if h['name'].lower() == 'date'), last_message.get('internalDate')) # Use Date header or internalDate
+                            latest_message_data_map[thread_id] = {
+                                'latest_message_subject': subject,
+                                'latest_message_from': from_sender,
+                                'latest_message_date': date_str,
+                            }
+                        else:
+                             latest_message_data_map[thread_id] = {} # No messages or payload found
+                return callback
+
+            for thread in basic_threads:
+                thread_id = thread['id']
+                # Request only metadata for the latest message - but threads.get requires fetching all messages metadata.
+                # There isn't a direct way to get ONLY the latest message easily with threads.get.
+                # Alternative: Use messages.list(threadId=thread_id, maxResults=1) - potentially faster?
+                # Let's stick to threads.get(format='metadata') for now, it gives all message headers.
+                batch.add(
+                    gmail_service.users().threads().get(userId='me', id=thread_id, format='metadata'),
+                    callback=_create_thread_get_callback(thread_id)
+                )
+            
+            await run_in_threadpool(batch.execute) # Execute batch fetch for thread metadata
+
+            # Combine basic thread info with enriched data
+            for thread in basic_threads:
+                thread_id = thread['id']
+                enriched_data = latest_message_data_map.get(thread_id, {})
+                enriched_threads.append(EnrichedThread(
+                    id=thread_id,
+                    snippet=thread.get('snippet', ''),
+                    historyId=thread.get('historyId', ''),
+                    **enriched_data # Add subject, from, date if found
+                ))
+        
+        return EnrichedThreadsListResponse(
+            threads=enriched_threads,
+            nextPageToken=next_page_token,
+            resultSizeEstimate=result_size_estimate,
+            labelIdsApplied=label_ids
+        )
 
     except Exception as e:
-        print(f"Google Gmail API error (list threads): {e}")
+        print(f"Google Gmail API error (list threads enriched): {e}")
+        # ... (existing error handling) ...
         if "insufficient permissions" in str(e).lower():
              raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions for Gmail.")
         if "invalid_grant" in str(e).lower() or "token has been expired or revoked" in str(e).lower():
              raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Google token invalid or revoked.")
-        # Handle other potential errors like invalid label IDs if needed
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error listing Gmail threads: {str(e)}")
 
 @router.get("/threads/{thread_id}")
