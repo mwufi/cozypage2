@@ -8,6 +8,7 @@ import {
 
 interface MailDisplayProps {
     selectedLabelId: string | null; // e.g., 'INBOX', or a user label ID
+    onSelectMail: (mailId: string) => void; // Add this prop
 }
 
 interface MailApiResponse {
@@ -16,7 +17,7 @@ interface MailApiResponse {
     labelIdsApplied?: string[]; // To confirm which labels were used by backend
 }
 
-const MailDisplay: React.FC<MailDisplayProps> = ({ selectedLabelId }) => {
+const MailDisplay: React.FC<MailDisplayProps> = ({ selectedLabelId, onSelectMail }) => {
     const [mails, setMails] = useState<MailItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -60,11 +61,12 @@ const MailDisplay: React.FC<MailDisplayProps> = ({ selectedLabelId }) => {
         fetchMailForLabel(selectedLabelId);
     }, [selectedLabelId]); // Re-fetch when selectedLabelId changes
 
-    const handleSelectMail = (mailId: string) => {
-        console.log("Selected Mail ID:", mailId);
-        // TODO: Implement logic to display mail details (e.g., open a new panel, modal)
-        alert(`Selected Mail ID: ${mailId} - Detail view not implemented yet.`);
-    };
+    // This internal handler is no longer needed if onSelectMail is passed down to MailList
+    // const handleSelectMailInternal = (mailId: string) => {
+    //     console.log("Selected Mail ID in MailDisplay:", mailId);
+    //     // Now, MailDisplay itself doesn't decide what to do. It calls the passed-in prop.
+    //     onSelectMail(mailId); 
+    // };
 
     return (
         <div className="flex flex-col h-full">
@@ -80,7 +82,8 @@ const MailDisplay: React.FC<MailDisplayProps> = ({ selectedLabelId }) => {
                 ) : error ? (
                     <div className="text-center text-red-400 py-8">Error: {error}</div>
                 ) : (
-                    <MailList mails={mails} onSelectMail={handleSelectMail} />
+                    // Pass the onSelectMail prop from DashboardPage down to MailList
+                    <MailList mails={mails} onSelectMail={onSelectMail} />
                 )}
             </div>
         </div>
