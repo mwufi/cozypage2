@@ -17,9 +17,16 @@ import google_auth_oauthlib.flow
 import googleapiclient.discovery
 import google.auth.transport.requests # Added for token refresh consistency
 
+# --- Database Imports --- 
+from sqlalchemy.ext.asyncio import AsyncSession
+from .database import engine, Base, get_db, create_db_and_tables # Import DB components
+from .models import UserGoogleToken # Import the model
+# --- End Database Imports ---
+
 # OAuth2 configuration
-CLIENT_SECRETS_FILE = "client_secret.json"
+CLIENT_SECRETS_FILE = "server/mailapi/client_secret.json"
 SCOPES = [
+    'openid', # Add openid scope
     'https://www.googleapis.com/auth/userinfo.email', # Request email to identify user
     'https://www.googleapis.com/auth/userinfo.profile',
     'https://www.googleapis.com/auth/drive.metadata.readonly',
@@ -83,10 +90,6 @@ class User(BaseModel):
     email: str
     # Add other user fields if needed
 
-# In-memory store for Google tokens (replace with DB in production)
-# Key: user_email, Value: dict of google tokens
-google_user_tokens_db: Dict[str, dict] = {}
-
 # JWT Utilities
 security = HTTPBearer()
 
@@ -100,7 +103,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> User:
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: AsyncSession = Depends(get_db)) -> User:
     token = credentials.credentials
     try:
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
@@ -111,6 +114,8 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
                 detail="Could not validate credentials - user_email missing",
                 headers={"WWW-Authenticate": "Bearer"},
             )
+        # Here you could add a DB lookup if you want to ensure the user exists in your system beyond JWT
+        # For now, just returning the User based on JWT email claim
         return User(email=user_email)
     except jwt.ExpiredSignatureError:
         raise HTTPException(
@@ -128,43 +133,42 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 
 # --- Dependency to get valid Google Credentials (handles refresh) ---
 async def get_refreshed_google_credentials(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db) # Inject DB session
 ) -> google.oauth2.credentials.Credentials:
     user_email = current_user.email
-    user_google_tokens = google_user_tokens_db.get(user_email)
+    # Retrieve tokens from DB
+    db_token_entry = await db.get(UserGoogleToken, user_email)
 
-    if not user_google_tokens:
+    if not db_token_entry:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, 
-            detail="User Google tokens not found. Please re-authenticate."
+            detail="User Google tokens not found in DB. Please re-authenticate."
         )
-
+    
+    user_google_tokens = db_token_entry.to_dict() # Convert model to dict for Credentials class
     credentials = google.oauth2.credentials.Credentials(**user_google_tokens)
     
     if credentials.expired and credentials.refresh_token:
         print(f"Google token expired for {user_email}, attempting refresh...")
         try:
-            # Use a Request object for the refresh
             request_object = google.auth.transport.requests.Request()
             credentials.refresh(request_object)
-            # Update the stored tokens with the refreshed ones
-            google_user_tokens_db[user_email] = credentials_to_dict(credentials)
-            print(f"Successfully refreshed Google token for {user_email}")
+            # Update the stored tokens in DB with the refreshed ones
+            refreshed_token_data = credentials_to_dict(credentials)
+            for key, value in refreshed_token_data.items():
+                setattr(db_token_entry, key, value)
+            await db.commit()
+            await db.refresh(db_token_entry)
+            print(f"Successfully refreshed Google token for {user_email} in DB")
         except google.auth.exceptions.RefreshError as e:
-            # Handle specific refresh errors (like invalid_grant)
             print(f"Failed to refresh Google token for {user_email}: {e}")
-            # Consider clearing stored tokens if refresh fails permanently
-            # google_user_tokens_db.pop(user_email, None) 
+            # Potentially clear tokens from DB if refresh fails permanently
+            # await db.delete(db_token_entry)
+            # await db.commit()
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, 
                 detail=f"Failed to refresh Google token ({e}). Please re-authenticate."
-            )
-        except Exception as e:
-            # Catch other potential exceptions during refresh
-            print(f"Unexpected error refreshing Google token for {user_email}: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"An unexpected error occurred during token refresh: {e}"
             )
     elif credentials.expired and not credentials.refresh_token:
         # Token expired, but no refresh token available
@@ -206,7 +210,7 @@ async def auth_google_login(request: Request):
     return RedirectResponse(authorization_url)
 
 @app.get("/auth/google/callback")
-async def auth_google_callback(request: Request, code: str, state: str):
+async def auth_google_callback(request: Request, code: str, state: str, db: AsyncSession = Depends(get_db)):
     stored_state = request.session.pop("oauth_state", None)
     if not stored_state or stored_state != state:
         return JSONResponse({"error": "State mismatch"}, status_code=status.HTTP_400_BAD_REQUEST)
@@ -220,7 +224,6 @@ async def auth_google_callback(request: Request, code: str, state: str):
 
     credentials = flow.credentials
     
-    # Get user info from Google to use as an identifier (email)
     userinfo_service = googleapiclient.discovery.build("oauth2", "v2", credentials=credentials)
     user_info = userinfo_service.userinfo().get().execute()
     user_email = user_info.get("email")
@@ -228,75 +231,66 @@ async def auth_google_callback(request: Request, code: str, state: str):
     if not user_email:
         return JSONResponse({"error": "Could not retrieve user email from Google"}, status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    # Store Google tokens (access, refresh, etc.) associated with the user_email
-    google_user_tokens_db[user_email] = {
-        'token': credentials.token,
-        'refresh_token': credentials.refresh_token,
-        'token_uri': credentials.token_uri,
-        'client_id': credentials.client_id,
-        'client_secret': credentials.client_secret,
-        'scopes': credentials.scopes
-    }
+    # Store/Update Google tokens in the database
+    token_data_dict = credentials_to_dict(credentials)
+    db_token_entry = await db.get(UserGoogleToken, user_email)
+    if db_token_entry:
+        # Update existing entry
+        for key, value in token_data_dict.items():
+            setattr(db_token_entry, key, value)
+        print(f"Updating Google tokens for {user_email} in DB.")
+    else:
+        # Create new entry
+        db_token_entry = UserGoogleToken(user_email=user_email, **token_data_dict)
+        db.add(db_token_entry)
+        print(f"Storing new Google tokens for {user_email} in DB.")
+    
+    await db.commit() # Commit the session here to save changes to DB
+    await db.refresh(db_token_entry) # Refresh to get any DB-generated fields (not applicable here but good practice)
 
     # Create JWT for our frontend
-    jwt_payload = {"sub": user_email} # "sub" is standard for subject (user identifier)
+    jwt_payload = {"sub": user_email}
     app_jwt = create_access_token(data=jwt_payload)
 
-    # Redirect to frontend callback with JWT
     frontend_callback_url = f"{FRONTEND_APP_URL}/auth/callback?jwt={app_jwt}"
     return RedirectResponse(frontend_callback_url)
 
 @app.post("/auth/refresh_token")
-async def auth_refresh_google_token(current_user: User = Depends(get_current_user)):
+async def auth_refresh_google_token(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """ Manually trigger a refresh of the user's Google OAuth token. """
     user_email = current_user.email
-    user_google_tokens = google_user_tokens_db.get(user_email)
+    db_token_entry = await db.get(UserGoogleToken, user_email)
 
-    if not user_google_tokens:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User Google tokens not found. Cannot refresh.")
+    if not db_token_entry:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User Google tokens not found in DB. Cannot refresh.")
     
+    user_google_tokens = db_token_entry.to_dict()
     if not user_google_tokens.get('refresh_token'):
          raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No refresh token available for this user. Re-authentication required.")
 
-    # Load credentials from stored data
     credentials = google.oauth2.credentials.Credentials(**user_google_tokens)
     
     try:
         request_object = google.auth.transport.requests.Request()
         credentials.refresh(request_object)
-        # Update the stored tokens with the refreshed ones (especially the new access token)
-        google_user_tokens_db[user_email] = credentials_to_dict(credentials)
-        print(f"Successfully refreshed Google token for {user_email}")
+        # Update the stored tokens in DB
+        refreshed_token_data = credentials_to_dict(credentials)
+        for key, value in refreshed_token_data.items():
+            setattr(db_token_entry, key, value)
+        await db.commit()
+        await db.refresh(db_token_entry)
+        print(f"Successfully refreshed Google token for {user_email} in DB via manual refresh endpoint")
         return {"message": f"Google token refreshed successfully for {user_email}", "new_expiry": credentials.expiry.isoformat() }
     except Exception as e:
         print(f"Error explicitly refreshing Google token for {user_email}: {e}")
-        # Handle specific errors like invalid_grant (refresh token revoked/expired)
         if "invalid_grant" in str(e).lower():
-            # Consider clearing stored tokens if refresh fails permanently
-            # google_user_tokens_db.pop(user_email, None) 
+            # await db.delete(db_token_entry) # Consider if token should be deleted
+            # await db.commit()
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token is invalid or revoked. Please re-authenticate.")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to refresh Google token: {str(e)}")
 
 @app.get("/drive")
-async def drive_api_request(current_user: User = Depends(get_current_user)):
-    user_email = current_user.email
-    user_google_tokens = google_user_tokens_db.get(user_email)
-
-    if not user_google_tokens:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User Google tokens not found. Please re-authenticate.")
-
-    credentials = google.oauth2.credentials.Credentials(**user_google_tokens)
-    
-    # Check if token needs refresh (simplified check, Google library often handles this)
-    if credentials.expired and credentials.refresh_token:
-        try:
-            credentials.refresh(google.auth.transport.requests.Request())
-            # Update stored tokens after refresh
-            google_user_tokens_db[user_email] = credentials_to_dict(credentials)
-        except Exception as e:
-            print(f"Error refreshing Google token for {user_email}: {e}")
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Failed to refresh Google token. Please re-authenticate.")
-
+async def drive_api_request(credentials: google.oauth2.credentials.Credentials = Depends(get_refreshed_google_credentials)):
     drive = googleapiclient.discovery.build(
         DRIVE_API_SERVICE_NAME, DRIVE_API_VERSION, credentials=credentials
     )
@@ -304,29 +298,13 @@ async def drive_api_request(current_user: User = Depends(get_current_user)):
         files = drive.files().list().execute()
         return files
     except Exception as e:
-        print(f"Google Drive API error for {user_email}: {e}")
-        # Check for specific auth errors from Google API call
+        print(f"Google Drive API error: {e}")
         if "invalid_grant" in str(e).lower() or "token has been expired or revoked" in str(e).lower():
              raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Google token invalid or revoked. Please re-authenticate.")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error accessing Google Drive: {str(e)}")
 
 @app.get("/calendar")
-async def calendar_api_request(current_user: User = Depends(get_current_user)):
-    user_email = current_user.email
-    user_google_tokens = google_user_tokens_db.get(user_email)
-
-    if not user_google_tokens:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User Google tokens not found. Please re-authenticate.")
-
-    credentials = google.oauth2.credentials.Credentials(**user_google_tokens)
-    if credentials.expired and credentials.refresh_token:
-        try:
-            credentials.refresh(google.auth.transport.requests.Request())
-            google_user_tokens_db[user_email] = credentials_to_dict(credentials)
-        except Exception as e:
-            print(f"Error refreshing Google token for {user_email}: {e}")
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Failed to refresh Google token. Please re-authenticate.")
-
+async def calendar_api_request(credentials: google.oauth2.credentials.Credentials = Depends(get_refreshed_google_credentials)):
     calendar = googleapiclient.discovery.build(
         CALENDAR_API_SERVICE_NAME, CALENDAR_API_VERSION, credentials=credentials
     )
@@ -334,7 +312,7 @@ async def calendar_api_request(current_user: User = Depends(get_current_user)):
         calendar_list = calendar.calendarList().list().execute()
         return calendar_list
     except Exception as e:
-        print(f"Google Calendar API error for {user_email}: {e}")
+        print(f"Google Calendar API error: {e}")
         if "invalid_grant" in str(e).lower() or "token has been expired or revoked" in str(e).lower():
              raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Google token invalid or revoked. Please re-authenticate.")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error accessing Google Calendar: {str(e)}")
@@ -382,3 +360,10 @@ if __name__ == "__main__":
     # os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1" # Set these via env vars or command line if needed
     # os.environ["OAUTHLIB_RELAX_TOKEN_SCOPE"] = "1"
     pass # Keep the block if you want the prints, otherwise remove entirely.
+
+@app.on_event("startup")
+async def on_startup():
+    """Create database tables on startup."""
+    print("Creating database tables...")
+    await create_db_and_tables()
+    print("Database tables created (if they didn't exist).")

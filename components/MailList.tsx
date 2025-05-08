@@ -13,6 +13,7 @@ export interface MailItem {
 
 interface MailListProps {
     mails: MailItem[];
+    onSelectMail: (mailId: string) => void;
 }
 
 // Helper to safely parse and format a date string
@@ -41,31 +42,31 @@ const unescapeHtml = (safeHtml: string) => {
     return Ktextarea.value;
 }
 
-const MailList: React.FC<MailListProps> = ({ mails }) => {
+const MailList: React.FC<MailListProps> = ({ mails, onSelectMail }) => {
     if (!mails || mails.length === 0) {
-        return <p className="text-center text-gray-400 py-8">Your inbox is empty or no messages found.</p>;
+        return <p className="text-center text-gray-400 py-8">No messages found.</p>;
     }
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-2">
             {mails.map((mail) => (
                 <div
                     key={mail.id}
-                    className="bg-gray-700 p-4 md:p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 border border-gray-600"
+                    className="bg-gray-800 p-3 rounded-md shadow-md hover:bg-gray-750 transition-colors duration-150 border border-gray-700 cursor-pointer"
+                    onClick={() => onSelectMail(mail.id)}
                 >
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2">
-                        <h3 className="text-lg md:text-xl font-semibold text-blue-300 mb-1 sm:mb-0 break-all">
+                    <div className="flex justify-between items-center mb-1">
+                        <h3 className="text-sm font-semibold text-gray-100 truncate pr-2" title={unescapeHtml(mail.subject)}>
                             {unescapeHtml(mail.subject)}
                         </h3>
                         <p className="text-xs text-gray-400 whitespace-nowrap">{formatDate(mail.date)}</p>
                     </div>
-                    <div className="text-sm text-gray-300 mb-3 break-all">
-                        <span className="font-medium text-gray-400">From:</span> {unescapeHtml(mail.from)}
+                    <div className="text-xs text-gray-400 mb-1 truncate" title={unescapeHtml(mail.from)}>
+                        {unescapeHtml(mail.from)}
                     </div>
-                    <p className="text-sm text-gray-400 leading-relaxed line-clamp-2">
+                    <p className="text-xs text-gray-500 line-clamp-1">
                         {mail.snippet}
                     </p>
-                    {/* Future: Link to view full email? */}
                 </div>
             ))}
         </div>

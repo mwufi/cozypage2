@@ -3,11 +3,11 @@ import google.oauth2.credentials
 import googleapiclient.discovery
 # google.auth.transport.requests is handled by dependency
 from datetime import datetime, timedelta
-from pydantic import BaseModel, EmailStr, validator
+from pydantic import BaseModel, EmailStr, field_validator, ValidationInfo
 from typing import Optional, List as PyList
 
 # Adjust import path
-from ..main import User, get_current_user, google_user_tokens_db, credentials_to_dict, get_refreshed_google_credentials # Added dependency
+from ..main import get_refreshed_google_credentials # Added dependency
 
 router = APIRouter(
     prefix="/calendar",
@@ -77,19 +77,24 @@ async def list_week_events(credentials: google.oauth2.credentials.Credentials = 
 
 # Endpoint for creating events will be added later
 class EventDateTime(BaseModel):
-    dateTime: Optional[str] = None # RFC3339 timestamp e.g., "2023-10-26T10:00:00-07:00"
-    date: Optional[str] = None     # YYYY-MM-DD for all-day events
-    timeZone: Optional[str] = None # e.g., "America/Los_Angeles"
+    dateTime: Optional[str] = None
+    date: Optional[str] = None
+    timeZone: Optional[str] = None
 
-    @validator('date', 'dateTime', pre=True, always=True)
-    def check_date_or_datetime(cls, v, field, values):
-        # Only one of date or dateTime should be provided
+    @field_validator('date', 'dateTime', mode='before')
+    @classmethod
+    def check_date_or_datetime(cls, v: Optional[str], info: ValidationInfo):
+        values = info.data
+        
+        field_name = info.field_name
         has_date = values.get('date') is not None
         has_datetime = values.get('dateTime') is not None
-        if field.name == 'date' and has_datetime and v is not None:
-             raise ValueError("Provide either 'date' for all-day or 'dateTime', not both.")
-        if field.name == 'dateTime' and has_date and v is not None:
+
+        if field_name == 'date' and v is not None and values.get('dateTime') is not None:
             raise ValueError("Provide either 'date' for all-day or 'dateTime', not both.")
+        if field_name == 'dateTime' and v is not None and values.get('date') is not None:
+             raise ValueError("Provide either 'date' for all-day or 'dateTime', not both.")
+
         return v
 
 class Attendee(BaseModel):

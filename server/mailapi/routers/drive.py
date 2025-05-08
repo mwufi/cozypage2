@@ -5,7 +5,7 @@ import googleapiclient.discovery
 from datetime import datetime
 
 # Adjust import path based on your project structure
-from ..main import User, get_current_user, google_user_tokens_db, credentials_to_dict, get_refreshed_google_credentials # Added get_refreshed_google_credentials
+from ..main import get_refreshed_google_credentials # Added get_refreshed_google_credentials
 
 router = APIRouter(
     prefix="/drive",
