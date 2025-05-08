@@ -7,6 +7,7 @@ from pydantic import BaseModel, EmailStr
 import base64
 from email.mime.text import MIMEText
 from typing import List, Optional # For List in query parameters
+from email.utils import formataddr, parseaddr # For parsing and formatting email addresses
 
 from ..main import User, get_current_user, credentials_to_dict, get_refreshed_google_credentials # Added dependency
 
@@ -189,4 +190,107 @@ async def create_blank_gmail_draft(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions to create Gmail draft.")
         if "invalid_grant" in str(e).lower() or "token has been expired or revoked" in str(e).lower():
              raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Google token invalid or revoked.")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Could not create blank Gmail draft: {str(e)}") 
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Could not create blank Gmail draft: {str(e)}")
+
+class DraftReplySchema(BaseModel):
+    original_message_id: str
+    # Optional: quote_original: bool = True # If we want to control quoting
+
+@router.post("/drafts/reply", status_code=status.HTTP_201_CREATED)
+async def create_draft_reply(
+    reply_data: DraftReplySchema,
+    credentials: google.oauth2.credentials.Credentials = Depends(get_refreshed_google_credentials)
+):
+    gmail_service = googleapiclient.discovery.build(GMAIL_API_SERVICE_NAME, GMAIL_API_VERSION, credentials=credentials)
+    original_message_id = reply_data.original_message_id
+
+    try:
+        # 1. Fetch the original message to get headers and threadId
+        original_message = gmail_service.users().messages().get(userId='me', id=original_message_id, format='metadata').execute()
+        original_headers = original_message.get('payload', {}).get('headers', [])
+        original_thread_id = original_message.get('threadId')
+
+        # 2. Extract necessary headers from the original message
+        original_subject = next((h['value'] for h in original_headers if h['name'].lower() == 'subject'), "")
+        original_from_header = next((h['value'] for h in original_headers if h['name'].lower() == 'from'), "")
+        original_to_header = next((h['value'] for h in original_headers if h['name'].lower() == 'to'), "")
+        original_cc_header = next((h['value'] for h in original_headers if h['name'].lower() == 'cc'), "")
+        original_message_id_header = next((h['value'] for h in original_headers if h['name'].lower() == 'message-id'), None)
+        original_references_header = next((h['value'] for h in original_headers if h['name'].lower() == 'references'), None)
+
+        # 3. Determine reply recipient(s)
+        # Prefer Reply-To header if it exists
+        reply_to_header = next((h['value'] for h in original_headers if h['name'].lower() == 'reply-to'), None)
+        if reply_to_header:
+            reply_to_email = reply_to_header
+        else:
+            # Otherwise, reply to the From address
+            reply_to_email = original_from_header
+        
+        # For a simple reply, the To field of the new draft is the From (or Reply-To) of the original.
+        # We won't auto-fill CC or BCC for a simple reply for now.
+
+        # 4. Construct the reply subject
+        reply_subject = original_subject
+        if not reply_subject.lower().startswith("re:"):
+            reply_subject = f"Re: {original_subject}"
+
+        # 5. Construct In-Reply-To and References headers
+        # These are crucial for threading.
+        in_reply_to = original_message_id_header
+        references = original_references_header
+        if references:
+            if original_message_id_header:
+                references = f"{references} {original_message_id_header}"
+        elif original_message_id_header:
+            references = original_message_id_header
+
+        # 6. Create the MIME message for the draft body (initially blank or with a quote)
+        # For now, a blank body. Quoting can be added later.
+        reply_body_text = "\n\n" # Start with a blank body
+        # Example for basic quoting (can be much more sophisticated):
+        # parsed_from = parseaddr(original_from_header)
+        # parsed_date = original_message.get('internalDate') # internalDate is timestamp in ms
+        # if parsed_date:
+        #     original_date_str = datetime.fromtimestamp(int(parsed_date)/1000).strftime('%a, %b %d, %Y at %I:%M %p')
+        #     reply_body_text += f"\n\nOn {original_date_str}, {parsed_from[1]} wrote:\n> ...original message snippet...\n"
+        
+        mime_message = MIMEText(reply_body_text)
+        mime_message['to'] = reply_to_email
+        mime_message['subject'] = reply_subject
+        if in_reply_to:
+            mime_message['In-Reply-To'] = in_reply_to
+        if references:
+            mime_message['References'] = references
+        
+        # The user's email will be automatically set as From by Gmail
+
+        raw_message_bytes = mime_message.as_bytes()
+        raw_message_b64url = base64.urlsafe_b64encode(raw_message_bytes).decode('utf-8')
+
+        # 7. Create the draft using the Gmail API
+        draft_body_for_api = {
+            'message': {
+                'raw': raw_message_b64url,
+                'threadId': original_thread_id # Ensure the draft is part of the same thread
+            }
+        }
+
+        created_draft = gmail_service.users().drafts().create(userId='me', body=draft_body_for_api).execute()
+
+        return {
+            "message": "Reply draft created successfully!",
+            "id": created_draft.get('id'),
+            "messageId": created_draft.get('message', {}).get('id'),
+            "threadId": original_thread_id
+        }
+
+    except googleapiclient.errors.HttpError as e:
+        if e.resp.status == 404:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Original message with ID {original_message_id} not found.")
+        # ... (other specific HttpError handling) ...
+        print(f"Google Gmail API error (create reply draft for {original_message_id}): {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error creating reply draft: {str(e)}")
+    except Exception as e:
+        print(f"General error creating reply draft for {original_message_id}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}") 

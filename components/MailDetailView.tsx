@@ -1,7 +1,8 @@
 'use client';
 
-import React from 'react';
-import { Loader2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { Loader2, MessageSquareReply } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 // This interface should ideally be shared or imported if defined elsewhere (e.g., DashboardPage)
 interface MailDetail {
@@ -19,6 +20,14 @@ interface MailDetailViewProps {
     mailData: MailDetail | null;
     isLoading: boolean;
     error: string | null;
+}
+
+interface ReplyDraftApiResponse {
+    message?: string;
+    id?: string; // Draft ID
+    messageId?: string; // Message ID associated with the draft
+    threadId?: string;
+    error?: string;
 }
 
 // Helper function to decode base64url encoding (common in Gmail API for body data)
@@ -83,6 +92,41 @@ const getEmailBody = (payload: any): { type: 'html' | 'text', content: string } 
 };
 
 const MailDetailView: React.FC<MailDetailViewProps> = ({ mailData, isLoading, error }) => {
+    const [isCreatingReplyDraft, setIsCreatingReplyDraft] = useState(false);
+    const [replyDraftResult, setReplyDraftResult] = useState<ReplyDraftApiResponse | null>(null);
+
+    const handleDraftReply = async () => {
+        if (!mailData || !mailData.id) {
+            alert("Cannot create reply draft: mail data or ID is missing.");
+            return;
+        }
+        console.log(`Attempting to create reply draft for message ID: ${mailData.id}`);
+        setIsCreatingReplyDraft(true);
+        setReplyDraftResult(null);
+        try {
+            const response = await fetch('/api/mail/drafts/reply', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ original_message_id: mailData.id }),
+            });
+            const data: ReplyDraftApiResponse = await response.json();
+            setReplyDraftResult(data);
+
+            if (!response.ok) {
+                throw new Error(data.error || `Error creating reply draft: ${response.status}`);
+            }
+            alert(`Reply draft created successfully! Draft ID: ${data.id}. It is part of thread: ${data.threadId}`);
+            console.log("Reply draft creation successful:", data);
+            // TODO: Future: Open compose modal with this draft ID
+
+        } catch (err: any) {
+            console.error("Error creating reply draft:", err);
+            setReplyDraftResult({ error: err.message || 'Failed to create reply draft.' });
+            alert(`Error creating reply draft: ${err.message || 'Unknown error'}`);
+        }
+        setIsCreatingReplyDraft(false);
+    };
+
     if (isLoading) {
         return (
             <div className="flex justify-center items-center h-full p-4">
@@ -111,9 +155,25 @@ const MailDetailView: React.FC<MailDetailViewProps> = ({ mailData, isLoading, er
     const bodyInfo = getEmailBody(mailData.payload);
 
     return (
-        <div className="p-1 md:p-4 h-full text-sm">
-            <div className="mb-4 pb-3 border-b border-gray-700">
-                <h1 className="text-xl font-semibold text-gray-100 mb-1 break-all">{subject}</h1>
+        <div className="p-1 md:p-4 h-full text-sm flex flex-col">
+            <div className="mb-2 pb-2 border-b border-gray-700">
+                <div className="flex justify-between items-center mb-1">
+                    <h1 className="text-xl font-semibold text-gray-100 break-all truncate pr-2" title={subject}>{subject}</h1>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleDraftReply}
+                        disabled={isCreatingReplyDraft}
+                        className="text-xs bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                        {isCreatingReplyDraft ? (
+                            <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                        ) : (
+                            <MessageSquareReply className="mr-1 h-3 w-3" />
+                        )}
+                        Reply
+                    </Button>
+                </div>
                 <div className="text-xs text-gray-400">
                     <p><span className="font-semibold text-gray-300">From:</span> {from}</p>
                     <p><span className="font-semibold text-gray-300">To:</span> {to}</p>
@@ -122,25 +182,38 @@ const MailDetailView: React.FC<MailDetailViewProps> = ({ mailData, isLoading, er
                 </div>
             </div>
 
-            {bodyInfo ? (
-                bodyInfo.type === 'html' ? (
-                    // Render HTML content safely. Using dangerouslySetInnerHTML requires trusting the source.
-                    // For user emails, consider an HTML sanitizer library (like DOMPurify) before rendering.
-                    <div
-                        className="prose prose-sm prose-invert max-w-none gmail-html-body"
-                        dangerouslySetInnerHTML={{ __html: bodyInfo.content }}
-                    />
-                ) : (
-                    <pre className="whitespace-pre-wrap break-words text-gray-200">{bodyInfo.content}</pre>
-                )
-            ) : mailData.snippet ? (
-                <>
-                    <p className="text-gray-300 mb-2">Could not render full body. Displaying snippet:</p>
-                    <p className="text-gray-400 italic">{mailData.snippet}</p>
-                </>
-            ) : (
-                <p className="text-gray-500">Email body not found or format not supported.</p>
+            {replyDraftResult && !replyDraftResult.error && (
+                <div className="mb-2 p-2 text-xs bg-green-800 border border-green-700 rounded-md text-green-200">
+                    {replyDraftResult.message} Draft ID: {replyDraftResult.id}
+                </div>
             )}
+            {replyDraftResult && replyDraftResult.error && (
+                <div className="mb-2 p-2 text-xs bg-red-800 border border-red-700 rounded-md text-red-200">
+                    Error creating reply: {replyDraftResult.error}
+                </div>
+            )}
+
+            <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
+                {bodyInfo ? (
+                    bodyInfo.type === 'html' ? (
+                        // Render HTML content safely. Using dangerouslySetInnerHTML requires trusting the source.
+                        // For user emails, consider an HTML sanitizer library (like DOMPurify) before rendering.
+                        <div
+                            className="prose prose-sm prose-invert max-w-none gmail-html-body"
+                            dangerouslySetInnerHTML={{ __html: bodyInfo.content }}
+                        />
+                    ) : (
+                        <pre className="whitespace-pre-wrap break-words text-gray-200">{bodyInfo.content}</pre>
+                    )
+                ) : mailData.snippet ? (
+                    <>
+                        <p className="text-gray-300 mb-2">Could not render full body. Displaying snippet:</p>
+                        <p className="text-gray-400 italic">{mailData.snippet}</p>
+                    </>
+                ) : (
+                    <p className="text-gray-500">Email body not found or format not supported.</p>
+                )}
+            </div>
         </div>
     );
 };
