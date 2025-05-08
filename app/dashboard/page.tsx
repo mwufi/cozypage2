@@ -44,6 +44,14 @@ interface MailDetailApiResponse {
     // ... any other fields from the Gmail API message resource ...
 }
 
+// Add an interface for the blank draft API response
+interface BlankDraftApiResponse {
+    message?: string;
+    id?: string; // Draft ID
+    messageId?: string; // Message ID associated with the draft
+    error?: string;
+}
+
 const PYTHON_BACKEND_URL = process.env.NEXT_PUBLIC_PYTHON_BACKEND_URL || 'http://localhost:8000';
 const GOOGLE_LOGIN_URL = `${PYTHON_BACKEND_URL}/auth/google/login`;
 
@@ -59,6 +67,10 @@ export default function DashboardPage() {
     const [mailDetailData, setMailDetailData] = useState<MailDetail | null>(null);
     const [isLoadingMailDetail, setIsLoadingMailDetail] = useState(false);
     const [mailDetailError, setMailDetailError] = useState<string | null>(null);
+
+    // Add state for draft creation process
+    const [isCreatingDraft, setIsCreatingDraft] = useState(false);
+    const [draftCreationResult, setDraftCreationResult] = useState<BlankDraftApiResponse | null>(null);
 
     // Fetch Labels
     async function fetchLabels() {
@@ -124,9 +136,32 @@ export default function DashboardPage() {
         setMailDetailError(null);
     };
 
-    const handleCompose = () => {
-        console.log("Compose clicked");
-        alert("Compose functionality not yet implemented in this view.");
+    const handleCompose = async () => {
+        console.log("Compose clicked - attempting to create blank draft...");
+        setIsCreatingDraft(true);
+        setDraftCreationResult(null); // Clear previous result
+        try {
+            const response = await fetch('/api/mail/drafts/create_blank', {
+                method: 'POST',
+                // No body needed for this request
+            });
+            const data: BlankDraftApiResponse = await response.json();
+            setDraftCreationResult(data);
+
+            if (!response.ok) {
+                throw new Error(data.error || `Error creating blank draft: ${response.status}`);
+            }
+
+            alert(`Blank draft created successfully! Draft ID: ${data.id}, Message ID: ${data.messageId}`);
+            // TODO: Future enhancement - open a compose modal or navigate to a compose view with this draft ID.
+            console.log("Blank draft creation successful:", data);
+
+        } catch (err: any) {
+            console.error("Error creating blank draft:", err);
+            setDraftCreationResult({ error: err.message || 'Failed to create blank draft.' });
+            alert(`Error creating blank draft: ${err.message || 'Unknown error'}`);
+        }
+        setIsCreatingDraft(false);
     };
 
     const handleViewMailDetail = (mailId: string) => {

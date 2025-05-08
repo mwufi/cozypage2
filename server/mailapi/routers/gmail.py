@@ -164,19 +164,20 @@ async def create_blank_gmail_draft(
     """Creates a new, blank draft message."""
     gmail_service = googleapiclient.discovery.build(GMAIL_API_SERVICE_NAME, GMAIL_API_VERSION, credentials=credentials)
     try:
-        # Create a very minimal message structure for the draft
-        # The Gmail API requires a message resource, even if it's mostly empty.
-        # We don't set To, Subject, or Body here; the user will fill them in.
-        message_body = {
+        # Create a minimal, valid raw RFC 822 message string.
+        # An empty subject and body is usually sufficient for a "blank" draft.
+        # The Gmail API requires the 'raw' field to be base64url encoded.
+        empty_email_content = "Subject: \n\n"
+        raw_message_bytes = empty_email_content.encode('utf-8')
+        raw_message_b64url = base64.urlsafe_b64encode(raw_message_bytes).decode('utf-8')
+
+        message_body_for_api = {
             'message': {
-                # 'raw': '' # Sending an empty raw field can sometimes cause issues.
-                         # It's often better to let Gmail create a truly blank draft.
-                         # Or, provide minimal valid raw if necessary: b64encode(b"Subject: \n\n").decode()
+                'raw': raw_message_b64url
             }
         }
-        # The `message` part of the body for drafts().create() is a messages Resource
-        # A completely empty message (no `raw` or `payload`) should create a blank draft.
-        draft = gmail_service.users().drafts().create(userId='me', body=message_body).execute()
+        
+        draft = gmail_service.users().drafts().create(userId='me', body=message_body_for_api).execute()
         return {
             "message": "Blank draft created successfully!", 
             "id": draft.get('id'),
