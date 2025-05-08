@@ -1,23 +1,42 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Loader2, MessageSquareReply } from 'lucide-react';
+import { Loader2, MessageSquareReply, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-// This interface should ideally be shared or imported if defined elsewhere (e.g., DashboardPage)
-interface MailDetail {
+// --- Interfaces (Should be defined/imported consistently) ---
+interface GmailMessage {
     id: string;
     threadId: string;
+    labelIds?: string[];
     snippet?: string;
-    payload?: any; // The full payload from Gmail API
-    subject?: string;
-    from?: string;
-    date?: string;
-    // We might add more processed fields here like a clean body string
+    historyId?: string;
+    internalDate?: string;
+    payload?: any;
+    sizeEstimate?: number;
+    raw?: string;
 }
 
-interface MailDetailViewProps {
-    mailData: MailDetail | null;
+interface GmailDraft {
+    id: string;
+    message?: {
+        id: string;
+        threadId: string;
+        labelIds?: string[];
+    }
+}
+
+interface ThreadDetailData {
+    id: string;
+    messages: GmailMessage[];
+    historyId: string;
+    snippet?: string;
+    drafts?: GmailDraft[];
+    subject?: string;
+}
+
+interface ThreadDetailViewProps {
+    threadData: ThreadDetailData | null;
     isLoading: boolean;
     error: string | null;
 }
@@ -30,7 +49,7 @@ interface ReplyDraftApiResponse {
     error?: string;
 }
 
-// Helper function to decode base64url encoding (common in Gmail API for body data)
+// --- Helper Functions (base64UrlDecode, getEmailBody - remain the same) ---
 function base64UrlDecode(str: string): string {
     try {
         // Replace Base64URL specific characters
@@ -61,7 +80,6 @@ function base64UrlDecode(str: string): string {
     }
 }
 
-// Function to find and decode the email body from the payload
 const getEmailBody = (payload: any): { type: 'html' | 'text', content: string } | null => {
     if (!payload) return null;
 
@@ -91,34 +109,97 @@ const getEmailBody = (payload: any): { type: 'html' | 'text', content: string } 
     return null; // Or return a default message like "Body not found or format not supported"
 };
 
-const MailDetailView: React.FC<MailDetailViewProps> = ({ mailData, isLoading, error }) => {
+// --- Individual Message/Draft Renderer ---
+// Extracted rendering logic for a single message/draft card
+const MessageCard: React.FC<{ message: GmailMessage, isDraft?: boolean }> = ({ message, isDraft = false }) => {
+    const headers = message.payload?.headers || [];
+    const subject = headers.find((h: any) => h.name.toLowerCase() === 'subject')?.value || '(No Subject)';
+    const from = headers.find((h: any) => h.name.toLowerCase() === 'from')?.value || 'N/A';
+    const date = message.internalDate ? new Date(parseInt(message.internalDate)).toLocaleString() : 'N/A';
+    const to = headers.find((h: any) => h.name.toLowerCase() === 'to')?.value || 'N/A';
+    const bodyInfo = getEmailBody(message.payload);
+    const [isExpanded, setIsExpanded] = useState(false);
+
+    // Use snippet as fallback if body parsing fails
+    const displayContent = bodyInfo ? bodyInfo.content : message.snippet;
+    const contentType = bodyInfo ? bodyInfo.type : 'text';
+
+    return (
+        <div className={`p-3 rounded border ${isDraft ? 'border-yellow-600 bg-yellow-900 bg-opacity-20' : 'border-gray-700 bg-gray-800'} mb-3 shadow-sm`}>
+            <div className="flex justify-between items-center mb-1 cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
+                <div className="text-xs text-gray-400 truncate pr-2">
+                    <span className="font-semibold text-gray-300">{isDraft ? 'Draft - To:' : 'From:'}</span> {isDraft ? to : from}
+                </div>
+                <span className="text-xs text-gray-500 whitespace-nowrap">{date}</span>
+            </div>
+
+            {isDraft && (
+                <p className="text-xs text-yellow-400 font-semibold mb-1">Subject: {subject}</p>
+            )}
+
+            {/* Show snippet or short preview initially */}
+            {!isExpanded && (
+                <p className="text-xs text-gray-400 line-clamp-2 cursor-pointer" onClick={() => setIsExpanded(true)}>
+                    {message.snippet || "(No snippet)"}
+                </p>
+            )}
+
+            {/* Show full body when expanded */}
+            {isExpanded && displayContent && (
+                <div className="mt-2 pt-2 border-t border-gray-600">
+                    {contentType === 'html' ? (
+                        <div
+                            className="prose prose-sm prose-invert max-w-none gmail-html-body text-xs"
+                            dangerouslySetInnerHTML={{ __html: displayContent }}
+                        />
+                    ) : (
+                        <pre className="whitespace-pre-wrap break-words text-gray-200 text-xs">{displayContent}</pre>
+                    )}
+                </div>
+            )}
+            {isExpanded && !displayContent && (
+                <p className="mt-2 pt-2 border-t border-gray-600 text-xs text-gray-500">(Could not display body)</p>
+            )}
+            {isDraft && isExpanded && (
+                <Button variant="link" size="sm" className="text-xs text-yellow-400 p-0 h-auto mt-1">
+                    Edit Draft (not implemented)
+                </Button>
+            )}
+        </div>
+    );
+};
+
+// --- Main ThreadDetailView Component ---
+const ThreadDetailView: React.FC<ThreadDetailViewProps> = ({ threadData, isLoading, error }) => {
     const [isCreatingReplyDraft, setIsCreatingReplyDraft] = useState(false);
     const [replyDraftResult, setReplyDraftResult] = useState<ReplyDraftApiResponse | null>(null);
 
+    // handleDraftReply remains the same, but now uses threadData.id (latest message) ?
+    // Or should reply be associated with the thread, not a specific message?
+    // Let's assume we reply to the *thread* (using the latest message for context if needed by backend)
+    // The backend currently takes original_message_id. Let's use the *last* message ID from the thread for the reply.
     const handleDraftReply = async () => {
-        if (!mailData || !mailData.id) {
-            alert("Cannot create reply draft: mail data or ID is missing.");
+        const lastMessage = threadData?.messages?.[threadData.messages.length - 1];
+        if (!threadData || !lastMessage || !lastMessage.id) {
+            alert("Cannot create reply draft: thread data or last message ID is missing.");
             return;
         }
-        console.log(`Attempting to create reply draft for message ID: ${mailData.id}`);
+        const original_message_id = lastMessage.id;
+        console.log(`Attempting to create reply draft for last message ID: ${original_message_id} in thread ${threadData.id}`);
         setIsCreatingReplyDraft(true);
         setReplyDraftResult(null);
         try {
             const response = await fetch('/api/mail/drafts/reply', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ original_message_id: mailData.id }),
+                body: JSON.stringify({ original_message_id }),
             });
             const data: ReplyDraftApiResponse = await response.json();
             setReplyDraftResult(data);
-
-            if (!response.ok) {
-                throw new Error(data.error || `Error creating reply draft: ${response.status}`);
-            }
+            if (!response.ok) throw new Error(data.error || `Error creating reply draft: ${response.status}`);
             alert(`Reply draft created successfully! Draft ID: ${data.id}. It is part of thread: ${data.threadId}`);
             console.log("Reply draft creation successful:", data);
-            // TODO: Future: Open compose modal with this draft ID
-
+            // TODO: Refresh thread data to show the new draft? Or manually add it to state?
         } catch (err: any) {
             console.error("Error creating reply draft:", err);
             setReplyDraftResult({ error: err.message || 'Failed to create reply draft.' });
@@ -140,82 +221,60 @@ const MailDetailView: React.FC<MailDetailViewProps> = ({ mailData, isLoading, er
         return <p className="text-red-400 p-4">Error loading email: {error}</p>;
     }
 
-    if (!mailData) {
-        return <p className="text-gray-500 p-4">Select an email to view its details.</p>;
+    if (!threadData) {
+        return <p className="text-gray-500 p-4">Select a conversation to view.</p>;
     }
 
-    // Extract headers for display (more robust parsing can be added)
-    const headers = mailData.payload?.headers || [];
-    const subject = headers.find((h: any) => h.name.toLowerCase() === 'subject')?.value || mailData.subject || 'No Subject';
-    const from = headers.find((h: any) => h.name.toLowerCase() === 'from')?.value || mailData.from || 'N/A';
-    const date = headers.find((h: any) => h.name.toLowerCase() === 'date')?.value || mailData.date || 'N/A';
-    const to = headers.find((h: any) => h.name.toLowerCase() === 'to')?.value || 'N/A';
-    const cc = headers.find((h: any) => h.name.toLowerCase() === 'cc')?.value || null;
-
-    const bodyInfo = getEmailBody(mailData.payload);
+    // Combine messages and drafts, maybe sort by date later if needed
+    const combinedItems = [
+        ...(threadData.messages || []).map(msg => ({ item: msg, type: 'message' as const })),
+        ...(threadData.drafts || []).map(draft => ({ item: draft, type: 'draft' as const }))
+    ];
+    // TODO: Sort combinedItems by date (requires parsing internalDate or draft message date)
 
     return (
-        <div className="p-1 md:p-4 h-full text-sm flex flex-col">
-            <div className="mb-2 pb-2 border-b border-gray-700">
+        <div className="p-1 md:p-4 h-full flex flex-col">
+            {/* Thread Header */}
+            <div className="mb-3 pb-3 border-b border-gray-700">
                 <div className="flex justify-between items-center mb-1">
-                    <h1 className="text-xl font-semibold text-gray-100 break-all truncate pr-2" title={subject}>{subject}</h1>
+                    <h1 className="text-lg font-semibold text-gray-100 truncate pr-2" title={threadData.subject}>{threadData.subject}</h1>
                     <Button
                         variant="outline"
                         size="sm"
                         onClick={handleDraftReply}
-                        disabled={isCreatingReplyDraft}
+                        disabled={isCreatingReplyDraft || !threadData.messages || threadData.messages.length === 0}
                         className="text-xs bg-blue-600 hover:bg-blue-700 text-white"
                     >
-                        {isCreatingReplyDraft ? (
-                            <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                        ) : (
-                            <MessageSquareReply className="mr-1 h-3 w-3" />
-                        )}
+                        {isCreatingReplyDraft ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <MessageSquareReply className="mr-1 h-3 w-3" />}
                         Reply
                     </Button>
                 </div>
-                <div className="text-xs text-gray-400">
-                    <p><span className="font-semibold text-gray-300">From:</span> {from}</p>
-                    <p><span className="font-semibold text-gray-300">To:</span> {to}</p>
-                    {cc && <p><span className="font-semibold text-gray-300">CC:</span> {cc}</p>}
-                    <p><span className="font-semibold text-gray-300">Date:</span> {new Date(date).toLocaleString()}</p>
-                </div>
+                {/* Display feedback for reply action */}
+                {replyDraftResult && !replyDraftResult.error && (
+                    <div className="mt-1 p-1.5 text-xs bg-green-800 border border-green-700 rounded-md text-green-200">
+                        {replyDraftResult.message} Draft ID: {replyDraftResult.id}
+                    </div>
+                )}
+                {replyDraftResult && replyDraftResult.error && (
+                    <div className="mt-1 p-1.5 text-xs bg-red-800 border border-red-700 rounded-md text-red-200">
+                        Error creating reply: {replyDraftResult.error}
+                    </div>
+                )}
             </div>
 
-            {replyDraftResult && !replyDraftResult.error && (
-                <div className="mb-2 p-2 text-xs bg-green-800 border border-green-700 rounded-md text-green-200">
-                    {replyDraftResult.message} Draft ID: {replyDraftResult.id}
-                </div>
-            )}
-            {replyDraftResult && replyDraftResult.error && (
-                <div className="mb-2 p-2 text-xs bg-red-800 border border-red-700 rounded-md text-red-200">
-                    Error creating reply: {replyDraftResult.error}
-                </div>
-            )}
-
-            <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
-                {bodyInfo ? (
-                    bodyInfo.type === 'html' ? (
-                        // Render HTML content safely. Using dangerouslySetInnerHTML requires trusting the source.
-                        // For user emails, consider an HTML sanitizer library (like DOMPurify) before rendering.
-                        <div
-                            className="prose prose-sm prose-invert max-w-none gmail-html-body"
-                            dangerouslySetInnerHTML={{ __html: bodyInfo.content }}
-                        />
-                    ) : (
-                        <pre className="whitespace-pre-wrap break-words text-gray-200">{bodyInfo.content}</pre>
-                    )
-                ) : mailData.snippet ? (
-                    <>
-                        <p className="text-gray-300 mb-2">Could not render full body. Displaying snippet:</p>
-                        <p className="text-gray-400 italic">{mailData.snippet}</p>
-                    </>
-                ) : (
-                    <p className="text-gray-500">Email body not found or format not supported.</p>
+            {/* List of Messages and Drafts */}
+            <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800 pr-2">
+                {combinedItems.map(({ item, type }) => (
+                    type === 'message'
+                        ? <MessageCard key={item.id} message={item as GmailMessage} />
+                        : <MessageCard key={item.id} message={(item as GmailDraft).message as GmailMessage} isDraft={true} /> // Pass draft message stub
+                ))}
+                {combinedItems.length === 0 && (
+                    <p className="text-gray-500">No messages or drafts in this conversation.</p>
                 )}
             </div>
         </div>
     );
 };
 
-export default MailDetailView; 
+export default ThreadDetailView; // Export with new name

@@ -1,93 +1,106 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import MailList, { MailItem } from '@/components/MailList';
-import {
-    Loader2
-} from "lucide-react";
+import { Loader2 } from "lucide-react";
 
-interface MailDisplayProps {
-    selectedLabelId: string | null; // e.g., 'INBOX', or a user label ID
-    onSelectMail: (mailId: string) => void; // Add this prop
+// Interface for a single thread in the list
+interface GmailThread {
+    id: string;
+    snippet: string;
+    historyId: string;
+    // Enriched data (optional)
+    subject?: string;
+    from?: string;
 }
 
-interface MailApiResponse {
-    messages?: MailItem[];
-    error?: string;
-    labelIdsApplied?: string[]; // To confirm which labels were used by backend
+// Props for the ThreadList component
+interface ThreadListProps {
+    threads: GmailThread[];
+    isLoading: boolean;
+    error: string | null;
+    onSelectThread: (threadId: string) => void;
+    selectedLabelId: string | null; // Keep for context or header if needed
 }
 
-const MailDisplay: React.FC<MailDisplayProps> = ({ selectedLabelId, onSelectMail }) => {
-    const [mails, setMails] = useState<MailItem[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    // const [currentLabel, setCurrentLabel] = useState<string | null>(null); // For display purposes
+// Placeholder function to extract info from snippet (can be improved)
+const parseSnippet = (snippet: string) => {
+    // Very basic: assumes sender might be before a dash or colon if present early
+    const separatorIndex = snippet.search(/ [-:] /);
+    let from = 'Unknown Sender';
+    let text = snippet;
+    if (separatorIndex > 0 && separatorIndex < 30) { // Crude check
+        from = snippet.substring(0, separatorIndex).trim();
+        text = snippet.substring(separatorIndex + 3).trim();
+    } else {
+        // Maybe just take first few words as sender?
+        const words = snippet.split(' ');
+        if (words.length > 2) from = words.slice(0, 2).join(' ');
+    }
+    // Limit snippet length
+    text = text.length > 100 ? text.substring(0, 97) + '...' : text;
+    return { from, text };
+}
 
-    useEffect(() => {
-        async function fetchMailForLabel(labelIdToFetch: string | null) {
-            setIsLoading(true);
-            setError(null);
-            setMails([]); // Clear previous mails
+// --- Component Renamed: ThreadList ---
+const ThreadList: React.FC<ThreadListProps> = ({
+    threads,
+    isLoading,
+    error,
+    onSelectThread,
+    selectedLabelId
+}) => {
 
-            let apiUrl = '/api/mail/messages'; // Base URL for the new endpoint
+    // We are no longer fetching data inside this component.
+    // Data (threads list) is passed down as props from DashboardPage.
 
-            if (labelIdToFetch) {
-                apiUrl += `?label_ids=${encodeURIComponent(labelIdToFetch)}`;
-            } else {
-                // Default to INBOX if null is explicitly passed, or handle as API default
-                // The backend defaults to INBOX if no label_ids are passed, which is fine.
-                // Or, explicitly send INBOX:
-                apiUrl += `?label_ids=INBOX`;
-            }
-            // You can also add max_results here if needed, e.g., apiUrl += `&max_results=50`;
+    if (isLoading) {
+        return (
+            <div className="flex justify-center items-center h-full">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
+            </div>
+        );
+    }
 
-            try {
-                const response = await fetch(apiUrl);
-                const data: MailApiResponse = await response.json();
+    if (error) {
+        return <div className="text-center text-red-400 py-8">Error: {error}</div>;
+    }
 
-                if (!response.ok) {
-                    throw new Error(data.error || `Error fetching mail: ${response.status} ${response.statusText}`);
-                }
-                setMails(data.messages || []);
-                // if(data.labelIdsApplied) setCurrentLabel(data.labelIdsApplied.join(', '));
-
-            } catch (err: any) {
-                console.error("Error fetching mail:", err);
-                setError(err.message || 'Failed to load messages.');
-            }
-            setIsLoading(false);
-        }
-
-        fetchMailForLabel(selectedLabelId);
-    }, [selectedLabelId]); // Re-fetch when selectedLabelId changes
-
-    // This internal handler is no longer needed if onSelectMail is passed down to MailList
-    // const handleSelectMailInternal = (mailId: string) => {
-    //     console.log("Selected Mail ID in MailDisplay:", mailId);
-    //     // Now, MailDisplay itself doesn't decide what to do. It calls the passed-in prop.
-    //     onSelectMail(mailId); 
-    // };
+    if (!threads || threads.length === 0) {
+        return <p className="text-center text-gray-400 py-8">No conversations found.</p>;
+    }
 
     return (
         <div className="flex flex-col h-full">
-            {/* Optional: Add a header to show currentLabel or selectedLabelId */}
+            {/* Optional Header */}
             {/* <div className="p-2 border-b border-gray-700 text-sm text-gray-400">
-                Displaying: {currentLabel || selectedLabelId || 'Default View'}
+                 Label: {selectedLabelId || 'N/A'}
             </div> */}
-            <div className="flex-1 overflow-y-auto p-4 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
-                {isLoading ? (
-                    <div className="flex justify-center items-center h-full">
-                        <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
-                    </div>
-                ) : error ? (
-                    <div className="text-center text-red-400 py-8">Error: {error}</div>
-                ) : (
-                    // Pass the onSelectMail prop from DashboardPage down to MailList
-                    <MailList mails={mails} onSelectMail={onSelectMail} />
-                )}
+            <div className="flex-1 overflow-y-auto p-2 space-y-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
+                {threads.map((thread) => {
+                    // Attempt to parse sender/subject from snippet (very basic)
+                    const { from, text: snippetText } = parseSnippet(thread.snippet);
+                    // Ideally, backend would provide subject/sender for threads.list
+
+                    return (
+                        <div
+                            key={thread.id}
+                            className="bg-gray-800 p-3 rounded-md shadow-sm hover:bg-gray-750 transition-colors duration-150 border border-gray-700 cursor-pointer"
+                            onClick={() => onSelectThread(thread.id)}
+                        >
+                            {/* Enhance this display - maybe show participants? */}
+                            <h3 className="text-sm font-semibold text-gray-200 truncate mb-1" title={from}>
+                                {from}
+                            </h3>
+                            <p className="text-xs text-gray-400 line-clamp-2">
+                                {thread.snippet}
+                            </p>
+                            {/* Add date of last message? Would require more data from backend */}
+                        </div>
+                    );
+                })}
             </div>
         </div>
     );
 };
 
-export default MailDisplay; 
+export default ThreadList; // Export with new name 

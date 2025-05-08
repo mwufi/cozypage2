@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import SidebarNav from "@/components/SidebarNav";
-import MailDisplay from "@/components/MailDisplay";
-import MailDetailView from "@/components/MailDetailView";
+import ThreadList from "@/components/MailDisplay";
+import ThreadDetailView from "@/components/MailDetailView";
 import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
 
@@ -21,27 +21,58 @@ interface LabelsApiResponse {
     error?: string;
 }
 
-// Define type for a single mail item detail (can be expanded based on API response)
-interface MailDetail {
+// Define interfaces for Thread data
+interface GmailThread { // Basic info returned by threads.list
     id: string;
-    threadId: string;
     snippet: string;
-    payload?: any; // The full payload from Gmail API (headers, body, parts, etc.)
-    subject?: string; // Extracted for convenience if needed, or derive from payload
+    historyId: string;
+    // Add enriched data if we fetch it later (subject, participants, date)
+    subject?: string;
     from?: string;
-    date?: string;
-    // Add more specific fields as you parse the payload
 }
 
-interface MailDetailApiResponse {
-    // Assuming the API returns the full message object from Gmail
-    // This might be more complex, adjust as per actual API response structure
-    id?: string;
-    threadId?: string;
-    snippet?: string;
-    payload?: any;
+interface ThreadsApiResponse {
+    threads?: GmailThread[];
+    nextPageToken?: string;
+    resultSizeEstimate?: number;
     error?: string;
-    // ... any other fields from the Gmail API message resource ...
+    labelIdsApplied?: string[];
+}
+
+// Define interfaces for Thread Detail data
+interface GmailMessage { // Structure within threads.get response
+    id: string;
+    threadId: string;
+    labelIds?: string[];
+    snippet?: string;
+    historyId?: string;
+    internalDate?: string;
+    payload?: any; // Contains headers, body, parts etc.
+    sizeEstimate?: number;
+    raw?: string;
+}
+
+interface GmailDraft {
+    id: string;
+    message?: { // Drafts have a nested message stub
+        id: string;
+        threadId: string;
+        labelIds?: string[];
+    }
+}
+
+interface ThreadDetailData { // Combined data structure for a thread
+    id: string;
+    messages: GmailMessage[];
+    historyId: string;
+    snippet?: string;
+    drafts?: GmailDraft[]; // Added drafts list
+    // We might want to compute subject, participants etc. here from messages[0]
+    subject?: string;
+}
+
+interface ThreadDetailApiResponse extends ThreadDetailData { // API response structure
+    error?: string;
 }
 
 // Add an interface for the blank draft API response
@@ -62,11 +93,17 @@ export default function DashboardPage() {
     const [selectedLabelId, setSelectedLabelId] = useState<string | null>('INBOX');
     const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
 
-    // State for selected mail detail
-    const [selectedMailIdForDetail, setSelectedMailIdForDetail] = useState<string | null>(null);
-    const [mailDetailData, setMailDetailData] = useState<MailDetail | null>(null);
-    const [isLoadingMailDetail, setIsLoadingMailDetail] = useState(false);
-    const [mailDetailError, setMailDetailError] = useState<string | null>(null);
+    // State for threads list
+    const [threads, setThreads] = useState<GmailThread[]>([]);
+    const [isLoadingThreads, setIsLoadingThreads] = useState(false);
+    const [threadsError, setThreadsError] = useState<string | null>(null);
+    const [threadsNextPageToken, setThreadsNextPageToken] = useState<string | null>(null);
+
+    // State for thread detail
+    const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+    const [threadDetailData, setThreadDetailData] = useState<ThreadDetailData | null>(null);
+    const [isLoadingThreadDetail, setIsLoadingThreadDetail] = useState(false);
+    const [threadDetailError, setThreadDetailError] = useState<string | null>(null);
 
     // Add state for draft creation process
     const [isCreatingDraft, setIsCreatingDraft] = useState(false);
@@ -101,39 +138,90 @@ export default function DashboardPage() {
         fetchLabels();
     }, []);
 
-    // Fetch Mail Detail when selectedMailIdForDetail changes
+    // Fetch Threads List when selectedLabelId changes
     useEffect(() => {
-        async function fetchMailDetail() {
-            if (!selectedMailIdForDetail) {
-                setMailDetailData(null); // Clear data if no ID
+        async function fetchThreads() {
+            if (isAuthenticated === false) return; // Don't fetch if not authenticated
+
+            setIsLoadingThreads(true);
+            setThreadsError(null);
+            setThreads([]); // Clear previous threads
+            setThreadsNextPageToken(null); // Reset pagination
+            // Also clear detail view when label changes
+            setSelectedThreadId(null);
+            setThreadDetailData(null);
+            setThreadDetailError(null);
+
+            let apiUrl = '/api/mail/threads';
+            const params = new URLSearchParams();
+            if (selectedLabelId) {
+                params.append('label_ids', selectedLabelId);
+            } else {
+                params.append('label_ids', 'INBOX'); // Default to INBOX if no label selected
+            }
+            // Add other params like max_results if needed
+            params.append('max_results', '30'); // Example: fetch 30 threads
+
+            apiUrl += `?${params.toString()}`;
+
+            try {
+                const response = await fetch(apiUrl);
+                const data: ThreadsApiResponse = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.error || `Error fetching threads: ${response.status}`);
+                }
+                setThreads(data.threads || []);
+                setThreadsNextPageToken(data.nextPageToken || null);
+                // TODO: Could potentially enrich thread data here (e.g., fetch latest message subject)
+            } catch (err: any) {
+                console.error("Error fetching threads:", err);
+                setThreadsError(err.message || 'Failed to load threads.');
+            }
+            setIsLoadingThreads(false);
+        }
+
+        // Fetch immediately if authenticated, or wait for auth state to be confirmed true
+        if (isAuthenticated === true) {
+            fetchThreads();
+        }
+
+    }, [selectedLabelId, isAuthenticated]); // Re-fetch when label or auth state changes
+
+    // Fetch Thread Detail when selectedThreadId changes
+    useEffect(() => {
+        async function fetchThreadDetail() {
+            if (!selectedThreadId) {
+                setThreadDetailData(null);
                 return;
             }
-            setIsLoadingMailDetail(true);
-            setMailDetailError(null);
-            setMailDetailData(null); // Clear previous data before fetching
+            setIsLoadingThreadDetail(true);
+            setThreadDetailError(null);
+            setThreadDetailData(null);
             try {
-                const response = await fetch(`/api/mail/messages/${selectedMailIdForDetail}`);
-                const data: MailDetailApiResponse = await response.json(); // Adjust type based on actual API response
+                const response = await fetch(`/api/mail/threads/${selectedThreadId}`);
+                const data: ThreadDetailApiResponse = await response.json();
                 if (!response.ok) {
-                    throw new Error(data.error || `Error fetching mail detail: ${response.status}`);
+                    throw new Error(data.error || `Error fetching thread detail: ${response.status}`);
                 }
-                // Here, you might want to process/transform `data` into `MailDetail` format if they differ
-                setMailDetailData(data as MailDetail);
+                // Add subject extracted from first message for easier display
+                const firstMessagePayload = data.messages?.[0]?.payload;
+                const headers = firstMessagePayload?.headers || [];
+                const subject = headers.find((h: any) => h.name.toLowerCase() === 'subject')?.value || '(No Subject)';
+                setThreadDetailData({ ...data, subject });
             } catch (err: any) {
-                console.error("Error fetching mail detail:", err);
-                setMailDetailError(err.message || 'Failed to load mail detail.');
+                console.error("Error fetching thread detail:", err);
+                setThreadDetailError(err.message || 'Failed to load thread detail.');
             }
-            setIsLoadingMailDetail(false);
+            setIsLoadingThreadDetail(false);
         }
-        fetchMailDetail();
-    }, [selectedMailIdForDetail]);
+        fetchThreadDetail();
+    }, [selectedThreadId]);
 
     const handleSelectLabel = (labelId: string | null) => {
         console.log("Selected Label:", labelId);
         setSelectedLabelId(labelId);
-        setSelectedMailIdForDetail(null); // Clear mail detail when changing label
-        setMailDetailData(null);
-        setMailDetailError(null);
+        // Fetching threads is now handled by the useEffect watching selectedLabelId
+        // Clearing detail view is also handled in that useEffect
     };
 
     const handleCompose = async () => {
@@ -164,9 +252,9 @@ export default function DashboardPage() {
         setIsCreatingDraft(false);
     };
 
-    const handleViewMailDetail = (mailId: string) => {
-        console.log("Viewing Mail ID:", mailId);
-        setSelectedMailIdForDetail(mailId);
+    const handleSelectThread = (threadId: string) => {
+        console.log("Selecting Thread ID:", threadId);
+        setSelectedThreadId(threadId);
     };
 
     // Render login prompt if not authenticated
@@ -207,34 +295,37 @@ export default function DashboardPage() {
                     />
                 </ResizablePanel>
                 <ResizableHandle withHandle className="bg-gray-600 w-1.5 hover:bg-blue-500 transition-colors" />
-                {/* Mail List Panel - Conditionally change size if detail is open */}
-                <ResizablePanel defaultSize={selectedMailIdForDetail ? 35 : 80} minSize={25} className="flex flex-col bg-gray-900">
-                    <MailDisplay
+                {/* Thread List Panel - Conditionally change size if detail is open */}
+                <ResizablePanel defaultSize={selectedThreadId ? 35 : 80} minSize={25} className="flex flex-col bg-gray-900">
+                    <ThreadList
+                        threads={threads}
+                        isLoading={isLoadingThreads}
+                        error={threadsError}
+                        onSelectThread={handleSelectThread}
                         selectedLabelId={selectedLabelId}
-                        onSelectMail={handleViewMailDetail}
                     />
                 </ResizablePanel>
 
-                {/* Mail Detail Panel - Only show if a mail is selected */}
-                {selectedMailIdForDetail && (
+                {/* Thread Detail Panel - Only show if a thread is selected */}
+                {selectedThreadId && (
                     <>
                         <ResizableHandle withHandle className="bg-gray-600 w-1.5 hover:bg-blue-500 transition-colors" />
                         <ResizablePanel defaultSize={45} minSize={30} className="flex flex-col bg-gray-850 border-l border-gray-700">
                             <div className="p-4 h-full overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
-                                <h2 className="text-xl font-semibold mb-4 text-blue-300">Mail Detail</h2>
-                                {isLoadingMailDetail && (
+                                <h2 className="text-xl font-semibold mb-4 text-blue-300">Thread Detail</h2>
+                                {isLoadingThreadDetail && (
                                     <div className="flex justify-center items-center h-full">
                                         <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
-                                        <p className="ml-2">Loading email...</p>
+                                        <p className="ml-2">Loading thread...</p>
                                     </div>
                                 )}
-                                {mailDetailError && <p className="text-red-400">Error: {mailDetailError}</p>}
+                                {threadDetailError && <p className="text-red-400">Error: {threadDetailError}</p>}
 
-                                {!isLoadingMailDetail && !mailDetailError && (
-                                    <MailDetailView
-                                        mailData={mailDetailData}
-                                        isLoading={isLoadingMailDetail}
-                                        error={mailDetailError}
+                                {!isLoadingThreadDetail && !threadDetailError && (
+                                    <ThreadDetailView
+                                        threadData={threadDetailData}
+                                        isLoading={isLoadingThreadDetail}
+                                        error={threadDetailError}
                                     />
                                 )}
                             </div>

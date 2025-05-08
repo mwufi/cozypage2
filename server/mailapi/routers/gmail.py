@@ -8,6 +8,8 @@ import base64
 from email.mime.text import MIMEText
 from typing import List, Optional # For List in query parameters
 from email.utils import formataddr, parseaddr # For parsing and formatting email addresses
+import re # For word splitting
+from datetime import datetime # For date formatting in quote
 
 from ..main import User, get_current_user, credentials_to_dict, get_refreshed_google_credentials # Added dependency
 
@@ -205,31 +207,24 @@ async def create_draft_reply(
     original_message_id = reply_data.original_message_id
 
     try:
-        # 1. Fetch the original message to get headers and threadId
+        # 1. Fetch the original message - use format='full' or 'metadata' + snippet
+        # format='metadata' includes the snippet which is often sufficient
         original_message = gmail_service.users().messages().get(userId='me', id=original_message_id, format='metadata').execute()
         original_headers = original_message.get('payload', {}).get('headers', [])
         original_thread_id = original_message.get('threadId')
+        original_snippet = original_message.get('snippet', '')
 
         # 2. Extract necessary headers from the original message
         original_subject = next((h['value'] for h in original_headers if h['name'].lower() == 'subject'), "")
         original_from_header = next((h['value'] for h in original_headers if h['name'].lower() == 'from'), "")
-        original_to_header = next((h['value'] for h in original_headers if h['name'].lower() == 'to'), "")
-        original_cc_header = next((h['value'] for h in original_headers if h['name'].lower() == 'cc'), "")
         original_message_id_header = next((h['value'] for h in original_headers if h['name'].lower() == 'message-id'), None)
         original_references_header = next((h['value'] for h in original_headers if h['name'].lower() == 'references'), None)
 
         # 3. Determine reply recipient(s)
         # Prefer Reply-To header if it exists
         reply_to_header = next((h['value'] for h in original_headers if h['name'].lower() == 'reply-to'), None)
-        if reply_to_header:
-            reply_to_email = reply_to_header
-        else:
-            # Otherwise, reply to the From address
-            reply_to_email = original_from_header
+        reply_to_email = reply_to_header if reply_to_header else original_from_header
         
-        # For a simple reply, the To field of the new draft is the From (or Reply-To) of the original.
-        # We won't auto-fill CC or BCC for a simple reply for now.
-
         # 4. Construct the reply subject
         reply_subject = original_subject
         if not reply_subject.lower().startswith("re:"):
@@ -245,16 +240,25 @@ async def create_draft_reply(
         elif original_message_id_header:
             references = original_message_id_header
 
-        # 6. Create the MIME message for the draft body (initially blank or with a quote)
-        # For now, a blank body. Quoting can be added later.
-        reply_body_text = "\n\n" # Start with a blank body
-        # Example for basic quoting (can be much more sophisticated):
-        # parsed_from = parseaddr(original_from_header)
-        # parsed_date = original_message.get('internalDate') # internalDate is timestamp in ms
-        # if parsed_date:
-        #     original_date_str = datetime.fromtimestamp(int(parsed_date)/1000).strftime('%a, %b %d, %Y at %I:%M %p')
-        #     reply_body_text += f"\n\nOn {original_date_str}, {parsed_from[1]} wrote:\n> ...original message snippet...\n"
+        # 6. Create the reply body with the first 10 words
         
+        # Extract first 10 words from snippet
+        words = re.split(r'\s+', original_snippet.strip()) # Split by whitespace
+        first_10_words = " ".join(words[:10])
+        if len(words) > 10:
+             first_10_words += "..."
+
+        # Format the reply body
+        reply_body_text = f"the first 10 words of this are <{first_10_words}>\n\n"
+        
+        # Optional: Add quoting block below
+        # parsed_from = parseaddr(original_from_header)
+        # original_date_str = next((h['value'] for h in original_headers if h['name'].lower() == 'date'), None)
+        # if original_date_str:
+        #     reply_body_text += f"\n\nOn {original_date_str}, {parsed_from[0] or parsed_from[1]} wrote:\n> {original_snippet}\n"
+        # else: # Fallback if Date header not found
+        #     reply_body_text += f"\n\n{parsed_from[0] or parsed_from[1]} wrote:\n> {original_snippet}\n"
+
         mime_message = MIMEText(reply_body_text)
         mime_message['to'] = reply_to_email
         mime_message['subject'] = reply_subject
@@ -293,4 +297,108 @@ async def create_draft_reply(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error creating reply draft: {str(e)}")
     except Exception as e:
         print(f"General error creating reply draft for {original_message_id}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
+
+@router.get("/threads")
+async def list_threads(
+    credentials: google.oauth2.credentials.Credentials = Depends(get_refreshed_google_credentials),
+    label_ids: Optional[List[str]] = Query(None), # Allow filtering by labels
+    max_results: int = Query(25, ge=1, le=100),
+    page_token: Optional[str] = Query(None)
+):
+    """Lists threads, optionally filtered by labels."""
+    gmail_service = googleapiclient.discovery.build(GMAIL_API_SERVICE_NAME, GMAIL_API_VERSION, credentials=credentials)
+    try:
+        thread_list_query = gmail_service.users().threads().list(
+            userId='me',
+            maxResults=max_results,
+            pageToken=page_token,
+            labelIds=label_ids # Pass label_ids if provided
+        )
+        results = await run_in_threadpool(thread_list_query.execute)
+        
+        threads = results.get('threads', [])
+        next_page_token = results.get('nextPageToken')
+        result_size_estimate = results.get('resultSizeEstimate')
+
+        # Note: Each thread object only contains id, snippet, historyId.
+        # For a richer list view (subject, senders), we'd need to fetch details for each thread,
+        # potentially the latest message using threads.get(id, format='metadata') for each.
+        # This can be slow. Consider if the snippet is enough for the list view initially.
+
+        return {
+            "threads": threads,
+            "nextPageToken": next_page_token,
+            "resultSizeEstimate": result_size_estimate,
+            "labelIdsApplied": label_ids # Echo back applied labels
+        }
+
+    except Exception as e:
+        print(f"Google Gmail API error (list threads): {e}")
+        if "insufficient permissions" in str(e).lower():
+             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions for Gmail.")
+        if "invalid_grant" in str(e).lower() or "token has been expired or revoked" in str(e).lower():
+             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Google token invalid or revoked.")
+        # Handle other potential errors like invalid label IDs if needed
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error listing Gmail threads: {str(e)}")
+
+@router.get("/threads/{thread_id}")
+async def get_thread_detail(
+    thread_id: str,
+    credentials: google.oauth2.credentials.Credentials = Depends(get_refreshed_google_credentials)
+    # Optional: Add query params for message format etc. if needed later
+):
+    """Gets the full details of a thread, including its messages and associated drafts."""
+    gmail_service = googleapiclient.discovery.build(GMAIL_API_SERVICE_NAME, GMAIL_API_VERSION, credentials=credentials)
+    try:
+        # 1. Get messages in the thread
+        thread_get_query = gmail_service.users().threads().get(
+            userId='me', 
+            id=thread_id, 
+            format='full' # Request full message details including payload (for body)
+        )
+        thread_data = await run_in_threadpool(thread_get_query.execute)
+        messages = thread_data.get('messages', [])
+
+        # 2. Find drafts associated with this thread
+        drafts = []
+        try:
+            drafts_list_query = gmail_service.users().drafts().list(
+                userId='me',
+                # Use q parameter to filter drafts by threadId. 
+                # Note: This relies on the draft having the correct threadId set, 
+                # which our create_draft_reply function does.
+                q=f'in:draft thread:{thread_id}'
+            )
+            draft_results = await run_in_threadpool(drafts_list_query.execute)
+            draft_summaries = draft_results.get('drafts', [])
+            
+            # If drafts are found, fetch their full details (especially the message part)
+            if draft_summaries:
+                 # Use batching for efficiency if multiple drafts per thread were possible (less common)
+                 # For simplicity now, fetch one by one if needed, or just return summary + ID
+                 # Fetching full draft details can be complex as it might involve another message get.
+                 # Let's return the draft summaries which include the draft ID and a nested (minimal) message stub.
+                 # The frontend can potentially fetch full draft message details separately if needed using the message ID.
+                 drafts = draft_summaries # Contains { id: draftId, message: { id: messageId, threadId: ... } }
+
+        except Exception as draft_error:
+             # Log the error but don't fail the whole request if drafts can't be fetched
+             print(f"Warning: Could not fetch drafts for thread {thread_id}: {draft_error}")
+
+        # 3. Combine and return
+        # The main thread_data already contains the list of messages.
+        # We add the fetched drafts list to it.
+        thread_data['drafts'] = drafts 
+
+        return thread_data
+
+    except googleapiclient.errors.HttpError as e:
+        if e.resp.status == 404:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Thread with ID {thread_id} not found.")
+        print(f"Google Gmail API error (get thread {thread_id}): {e}")
+        # ... (other error handling as in get_message_detail)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error accessing Gmail thread: {str(e)}")
+    except Exception as e:
+        print(f"General error getting thread {thread_id}: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}") 
