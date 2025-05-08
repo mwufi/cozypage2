@@ -39,9 +39,19 @@ The `SECRET_KEY` is used for session encryption. Generate a secure random string
 
 ## Running the Server
 
+Navigate to your workspace root directory (the parent directory of `server`) in your terminal.
+
+Run the server using Uvicorn, pointing it to the application instance within the module:
+
 ```sh
-python main.py
+# From workspace root (/Users/zenzen/ara-bunny)
+uvicorn server.mailapi.main:app --reload --port 8000
 ```
+
+*   `server.mailapi.main`: The Python module path to your main file.
+*   `app`: The FastAPI application instance created in `main.py`.
+*   `--reload`: Enables auto-reloading for development.
+*   `--port 8000`: Specifies the port (optional, defaults to 8000).
 
 The server will run at `http://localhost:8000`.
 

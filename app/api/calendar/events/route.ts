@@ -10,9 +10,6 @@ export async function GET(request: NextRequest) {
     const jwt = tokenCookie?.value;
 
     if (!jwt) {
-        // If no JWT, it means the user is not authenticated with our app.
-        // The Python backend will also reject if it requires auth and no token is sent.
-        // We can return a 401 directly to prompt login on the frontend.
         return NextResponse.json(
             { error: 'Authentication required. Please login.' },
             { status: 401 }
@@ -20,34 +17,32 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-        const response = await fetch(`${backendUrl}/drive/`, { // Ensure trailing slash if your router expects it
+        const response = await fetch(`${backendUrl}/calendar/events_week`, {
             headers: {
                 'Authorization': `Bearer ${jwt}`,
             },
         });
 
         if (response.status === 401) {
-            // This could happen if the JWT is expired/invalid on the backend, or Google token issue.
-            // The frontend (DrivePage) should handle this by prompting re-login.
-            // Clear the cookie if auth fails (e.g. token expired)
-            // Note: cookies().delete() is for Server Actions. For Route Handlers, 
-            // we need to set the cookie with an expired date or empty value via headers.
-            // However, a simpler approach for now is to let the client handle login prompt.
-            // For true deletion from a route handler, you'd send back a Set-Cookie header.
             const res = NextResponse.json(
                 { error: 'Session expired or invalid. Please login again.' },
                 { status: 401 }
             );
-            // Example of how to set a cookie for deletion (though not strictly necessary if client handles re-auth)
             res.cookies.set('app_jwt', '', { maxAge: -1, path: '/' });
             return res;
+        }
+        if (response.status === 403) {
+            return NextResponse.json(
+                { error: 'Insufficient permissions for Calendar on the backend.' },
+                { status: 403 }
+            );
         }
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('Error from Python backend (Drive API - GET files):', response.status, errorText.substring(0, 500));
+            console.error('Error from Python backend (Calendar API - GET events_week):', response.status, errorText.substring(0, 500));
             return NextResponse.json(
-                { error: `Backend error: ${response.status} - ${errorText.substring(0, 100)}` },
+                { error: `Backend error fetching calendar events: ${response.status} - ${errorText.substring(0, 100)}` },
                 { status: response.status }
             );
         }
@@ -58,7 +53,7 @@ export async function GET(request: NextRequest) {
             return NextResponse.json(data);
         } else {
             const textData = await response.text();
-            console.error('Received unexpected non-JSON response from backend (Drive API - GET files):', response.status, textData.substring(0, 500));
+            console.error('Received unexpected non-JSON response from backend (Calendar API - GET events_week):', response.status, textData.substring(0, 500));
             return NextResponse.json(
                 { error: 'Received unexpected non-JSON response from backend' },
                 { status: 502 }
@@ -66,15 +61,15 @@ export async function GET(request: NextRequest) {
         }
 
     } catch (error) {
-        console.error('Error in /api/drive Next.js route (GET files):', error);
+        console.error('Error in /api/calendar/events Next.js route (GET):', error);
         return NextResponse.json(
-            { error: 'Internal Server Error in Next.js API route' },
+            { error: 'Internal Server Error in Next.js API route for calendar events' },
             { status: 500 }
         );
     }
 }
 
-// New POST function for creating a document
+// POST function for creating a calendar event
 export async function POST(request: NextRequest) {
     const backendUrl = process.env.NODE_ENV === 'production'
         ? process.env.PROD_BACKEND_URL
@@ -90,17 +85,28 @@ export async function POST(request: NextRequest) {
         );
     }
 
-    // Optional: Could take a title from the request body if needed
-    // const { title } = await request.json(); 
+    let eventData;
+    try {
+        eventData = await request.json();
+        // Basic validation, more thorough validation happens on the backend
+        if (!eventData.summary || !eventData.start || !eventData.end) {
+            return NextResponse.json(
+                { error: 'Missing required fields: summary, start, end' },
+                { status: 400 } // Bad Request
+            );
+        }
+    } catch (e) {
+        return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
 
     try {
-        const response = await fetch(`${backendUrl}/drive/create_doc`, {
+        const response = await fetch(`${backendUrl}/calendar/events`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${jwt}`,
-                'Content-Type': 'application/json' // Though body is empty for now
+                'Content-Type': 'application/json',
             },
-            // body: JSON.stringify({ title: title || 'New Document from Frontend' }) // If sending a title
+            body: JSON.stringify(eventData),
         });
 
         if (response.status === 401) {
@@ -111,29 +117,36 @@ export async function POST(request: NextRequest) {
             res.cookies.set('app_jwt', '', { maxAge: -1, path: '/' });
             return res;
         }
-        if (response.status === 403) { // Insufficient permissions
+        if (response.status === 403) {
             return NextResponse.json(
-                { error: 'Insufficient permissions on the backend. You may need to re-grant access with new scopes.' },
+                { error: 'Insufficient permissions to create event. You may need to re-grant access.' },
                 { status: 403 }
+            );
+        }
+        if (response.status === 400) { // Catch bad requests from backend validation
+            const data = await response.json();
+            return NextResponse.json(
+                { error: data.detail || 'Invalid event data provided.' },
+                { status: 400 }
             );
         }
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('Error from Python backend (Drive API - POST create_doc):', response.status, errorText.substring(0, 500));
+            console.error('Error from Python backend (Calendar API - POST events):', response.status, errorText.substring(0, 500));
             return NextResponse.json(
-                { error: `Backend error creating doc: ${response.status} - ${errorText.substring(0, 100)}` },
+                { error: `Backend error creating event: ${response.status} - ${errorText.substring(0, 100)}` },
                 { status: response.status }
             );
         }
 
-        const data = await response.json(); // Expecting { message, id, title, link }
+        const data = await response.json(); // Expecting { message, id, summary, htmlLink }
         return NextResponse.json(data, { status: response.status }); // Relay backend status (e.g., 201 Created)
 
     } catch (error) {
-        console.error('Error in /api/drive Next.js route (POST create_doc):', error);
+        console.error('Error in /api/calendar/events Next.js route (POST):', error);
         return NextResponse.json(
-            { error: 'Internal Server Error in Next.js API route while creating doc' },
+            { error: 'Internal Server Error in Next.js API route for creating calendar event' },
             { status: 500 }
         );
     }
