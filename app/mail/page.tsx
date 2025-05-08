@@ -54,11 +54,17 @@ export default function MailPage() {
     const [draftSuccessMessage, setDraftSuccessMessage] = useState<string | null>(null);
     const [draftForm, setDraftForm] = useState({ to: '', subject: '', body: '' });
 
+    // Dummy handler for MailList on this page, as it doesn't have a detail view
+    const handleSelectMailOnPage = (mailId: string) => {
+        console.log(`Mail item selected on /mail page (no detail view implemented here): ${mailId}`);
+        // alert(`Selected mail ${mailId} - this page doesn't show details.`);
+    };
+
     async function fetchMail(maxResults = 10) {
         setIsLoading(true);
         setError(null);
         try {
-            const response = await fetch(`/api/mail/inbox?max_results=${maxResults}`);
+            const response = await fetch(`/api/mail/messages?label_ids=INBOX&max_results=${maxResults}`);
             if (response.status === 401) {
                 setIsAuthenticated(false);
                 setError('Authentication required for Mail. Please login.');
@@ -212,7 +218,7 @@ export default function MailPage() {
                     {isLoading ? (
                         <div className="flex justify-center items-center h-64"><p className="text-lg text-gray-400">Fetching messages...</p></div>
                     ) : !error && mails.length > 0 ? (
-                        <MailList mails={mails} />
+                        <MailList mails={mails} onSelectMail={handleSelectMailOnPage} />
                     ) : !error ? (
                         <p className="text-gray-400 text-center py-10">No messages found in your inbox.</p>
                     ) : null /* Error already displayed above mail section */}

@@ -13,44 +13,46 @@ interface MailDisplayProps {
 interface MailApiResponse {
     messages?: MailItem[];
     error?: string;
+    labelIdsApplied?: string[]; // To confirm which labels were used by backend
 }
 
 const MailDisplay: React.FC<MailDisplayProps> = ({ selectedLabelId }) => {
     const [mails, setMails] = useState<MailItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    // const [currentLabel, setCurrentLabel] = useState<string | null>(null); // For display purposes
 
     useEffect(() => {
-        async function fetchMailForLabel(labelId: string | null) {
+        async function fetchMailForLabel(labelIdToFetch: string | null) {
             setIsLoading(true);
             setError(null);
             setMails([]); // Clear previous mails
 
-            // Use appropriate API route based on label
-            // For now, we only have the inbox route, need to adapt later for other labels
-            const apiUrl = labelId === 'INBOX' || labelId === null // Default to inbox
-                ? '/api/mail/inbox'
-                : `/api/mail/list?labelId=${labelId}`; // Hypothetical future route
+            let apiUrl = '/api/mail/messages'; // Base URL for the new endpoint
 
-            // Temporary: Only fetch inbox for now until filtering API is implemented
-            if (labelId !== 'INBOX' && labelId !== null) {
-                setError(`Filtering by label '${labelId}' not yet implemented.`);
-                setIsLoading(false);
-                return;
+            if (labelIdToFetch) {
+                apiUrl += `?label_ids=${encodeURIComponent(labelIdToFetch)}`;
+            } else {
+                // Default to INBOX if null is explicitly passed, or handle as API default
+                // The backend defaults to INBOX if no label_ids are passed, which is fine.
+                // Or, explicitly send INBOX:
+                apiUrl += `?label_ids=INBOX`;
             }
+            // You can also add max_results here if needed, e.g., apiUrl += `&max_results=50`;
 
             try {
                 const response = await fetch(apiUrl);
                 const data: MailApiResponse = await response.json();
 
                 if (!response.ok) {
-                    throw new Error(data.error || `Error fetching mail: ${response.status}`);
+                    throw new Error(data.error || `Error fetching mail: ${response.status} ${response.statusText}`);
                 }
                 setMails(data.messages || []);
+                // if(data.labelIdsApplied) setCurrentLabel(data.labelIdsApplied.join(', '));
+
             } catch (err: any) {
                 console.error("Error fetching mail:", err);
                 setError(err.message || 'Failed to load messages.');
-                // Handle 401 specifically? Maybe redirect? Depends on where this component is used.
             }
             setIsLoading(false);
         }
@@ -66,7 +68,10 @@ const MailDisplay: React.FC<MailDisplayProps> = ({ selectedLabelId }) => {
 
     return (
         <div className="flex flex-col h-full">
-            {/* Optional: Add toolbar here (Refresh, etc.) */}
+            {/* Optional: Add a header to show currentLabel or selectedLabelId */}
+            {/* <div className="p-2 border-b border-gray-700 text-sm text-gray-400">
+                Displaying: {currentLabel || selectedLabelId || 'Default View'}
+            </div> */}
             <div className="flex-1 overflow-y-auto p-4 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
                 {isLoading ? (
                     <div className="flex justify-center items-center h-full">

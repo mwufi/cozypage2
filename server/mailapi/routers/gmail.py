@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.concurrency import run_in_threadpool # Import run_in_threadpool
 import google.oauth2.credentials
 import googleapiclient.discovery
 # google.auth.transport.requests handled by dependency
@@ -65,7 +66,7 @@ async def list_messages(
                     callback=_create_callback(msg_id)
                 )
             
-            await gmail_service._client.loop.run_in_executor(None, batch.execute) # Run batch request
+            await run_in_threadpool(batch.execute)
 
             # Reconstruct detailed_messages in order
             for msg_summary in messages_summary:
@@ -81,6 +82,31 @@ async def list_messages(
         if "invalid_grant" in str(e).lower() or "token has been expired or revoked" in str(e).lower():
              raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Google token invalid or revoked.")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error accessing Gmail: {str(e)}")
+
+@router.get("/messages/{message_id}")
+async def get_message_detail(
+    message_id: str,
+    credentials: google.oauth2.credentials.Credentials = Depends(get_refreshed_google_credentials),
+    # format_type: str = Query("full", enum=["full", "minimal", "raw", "metadata"]) # Optional: Allow specifying format
+):
+    gmail_service = googleapiclient.discovery.build(GMAIL_API_SERVICE_NAME, GMAIL_API_VERSION, credentials=credentials)
+    try:
+        # Using format='full' to get most details including body parts
+        # Consider what parts of the message are needed for display to optimize
+        message = gmail_service.users().messages().get(userId='me', id=message_id, format='full').execute()
+        return message
+    except googleapiclient.errors.HttpError as e:
+        if e.resp.status == 404:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Message with ID {message_id} not found.")
+        print(f"Google Gmail API error (get message {message_id}): {e}")
+        if "insufficient permissions" in str(e).lower():
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions for Gmail.")
+        if "invalid_grant" in str(e).lower() or "token has been expired or revoked" in str(e).lower():
+             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Google token invalid or revoked.")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error accessing Gmail message: {str(e)}")
+    except Exception as e:
+        print(f"General error getting message {message_id}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
 
 @router.get("/labels")
 async def list_gmail_labels(credentials: google.oauth2.credentials.Credentials = Depends(get_refreshed_google_credentials)):
@@ -129,4 +155,37 @@ async def create_gmail_draft(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions to create Gmail draft.")
         if "invalid_grant" in str(e).lower() or "token has been expired or revoked" in str(e).lower():
              raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Google token invalid or revoked.")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Could not create Gmail draft: {str(e)}") 
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Could not create Gmail draft: {str(e)}")
+
+@router.post("/drafts/create_blank", status_code=status.HTTP_201_CREATED)
+async def create_blank_gmail_draft(
+    credentials: google.oauth2.credentials.Credentials = Depends(get_refreshed_google_credentials)
+):
+    """Creates a new, blank draft message."""
+    gmail_service = googleapiclient.discovery.build(GMAIL_API_SERVICE_NAME, GMAIL_API_VERSION, credentials=credentials)
+    try:
+        # Create a very minimal message structure for the draft
+        # The Gmail API requires a message resource, even if it's mostly empty.
+        # We don't set To, Subject, or Body here; the user will fill them in.
+        message_body = {
+            'message': {
+                # 'raw': '' # Sending an empty raw field can sometimes cause issues.
+                         # It's often better to let Gmail create a truly blank draft.
+                         # Or, provide minimal valid raw if necessary: b64encode(b"Subject: \n\n").decode()
+            }
+        }
+        # The `message` part of the body for drafts().create() is a messages Resource
+        # A completely empty message (no `raw` or `payload`) should create a blank draft.
+        draft = gmail_service.users().drafts().create(userId='me', body=message_body).execute()
+        return {
+            "message": "Blank draft created successfully!", 
+            "id": draft.get('id'),
+            "messageId": draft.get('message', {}).get('id')
+        }
+    except Exception as e:
+        print(f"Google Gmail API error (create blank draft): {e}")
+        if "insufficient permissions" in str(e).lower():
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions to create Gmail draft.")
+        if "invalid_grant" in str(e).lower() or "token has been expired or revoked" in str(e).lower():
+             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Google token invalid or revoked.")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Could not create blank Gmail draft: {str(e)}") 

@@ -137,7 +137,6 @@ async def get_refreshed_google_credentials(
     db: AsyncSession = Depends(get_db) # Inject DB session
 ) -> google.oauth2.credentials.Credentials:
     user_email = current_user.email
-    # Retrieve tokens from DB
     db_token_entry = await db.get(UserGoogleToken, user_email)
 
     if not db_token_entry:
@@ -146,8 +145,16 @@ async def get_refreshed_google_credentials(
             detail="User Google tokens not found in DB. Please re-authenticate."
         )
     
-    user_google_tokens = db_token_entry.to_dict() # Convert model to dict for Credentials class
-    credentials = google.oauth2.credentials.Credentials(**user_google_tokens)
+    # Construct dict specifically for Google Credentials, excluding user_email
+    token_data_for_google_creds = {
+        'token': db_token_entry.token,
+        'refresh_token': db_token_entry.refresh_token,
+        'token_uri': db_token_entry.token_uri,
+        'client_id': db_token_entry.client_id,
+        'client_secret': db_token_entry.client_secret,
+        'scopes': db_token_entry.scopes
+    }
+    credentials = google.oauth2.credentials.Credentials(**token_data_for_google_creds)
     
     if credentials.expired and credentials.refresh_token:
         print(f"Google token expired for {user_email}, attempting refresh...")
@@ -155,7 +162,7 @@ async def get_refreshed_google_credentials(
             request_object = google.auth.transport.requests.Request()
             credentials.refresh(request_object)
             # Update the stored tokens in DB with the refreshed ones
-            refreshed_token_data = credentials_to_dict(credentials)
+            refreshed_token_data = credentials_to_dict(credentials) # This helper is fine
             for key, value in refreshed_token_data.items():
                 setattr(db_token_entry, key, value)
             await db.commit()
@@ -163,30 +170,29 @@ async def get_refreshed_google_credentials(
             print(f"Successfully refreshed Google token for {user_email} in DB")
         except google.auth.exceptions.RefreshError as e:
             print(f"Failed to refresh Google token for {user_email}: {e}")
-            # Potentially clear tokens from DB if refresh fails permanently
-            # await db.delete(db_token_entry)
-            # await db.commit()
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, 
                 detail=f"Failed to refresh Google token ({e}). Please re-authenticate."
             )
+        except Exception as e:
+            print(f"Unexpected error refreshing Google token for {user_email}: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"An unexpected error occurred during token refresh: {e}"
+            )
     elif credentials.expired and not credentials.refresh_token:
-        # Token expired, but no refresh token available
         print(f"Google token expired for {user_email}, but no refresh token found.")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication session expired, and no refresh token available. Please re-authenticate."
         )
         
-    # Check if the token is still valid after potential refresh attempt or if it wasn't expired
     if not credentials.valid:
-         # This case might occur if the token was near expiry but refresh failed for non-exception reason, or clock skew
          print(f"Google token is invalid for {user_email} even after refresh check.")
          raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid Google credentials. Please re-authenticate."
          )
-
     return credentials
 
 def get_google_flow(state: Optional[str] = None) -> google_auth_oauthlib.flow.Flow:
@@ -264,17 +270,25 @@ async def auth_refresh_google_token(current_user: User = Depends(get_current_use
     if not db_token_entry:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User Google tokens not found in DB. Cannot refresh.")
     
-    user_google_tokens = db_token_entry.to_dict()
-    if not user_google_tokens.get('refresh_token'):
+    if not db_token_entry.refresh_token: # Check refresh_token directly from model
          raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No refresh token available for this user. Re-authentication required.")
 
-    credentials = google.oauth2.credentials.Credentials(**user_google_tokens)
+    # Construct dict specifically for Google Credentials
+    token_data_for_google_creds = {
+        'token': db_token_entry.token,
+        'refresh_token': db_token_entry.refresh_token,
+        'token_uri': db_token_entry.token_uri,
+        'client_id': db_token_entry.client_id,
+        'client_secret': db_token_entry.client_secret,
+        'scopes': db_token_entry.scopes
+    }
+    credentials = google.oauth2.credentials.Credentials(**token_data_for_google_creds)
     
     try:
         request_object = google.auth.transport.requests.Request()
         credentials.refresh(request_object)
         # Update the stored tokens in DB
-        refreshed_token_data = credentials_to_dict(credentials)
+        refreshed_token_data = credentials_to_dict(credentials) # This helper is fine
         for key, value in refreshed_token_data.items():
             setattr(db_token_entry, key, value)
         await db.commit()
@@ -284,8 +298,6 @@ async def auth_refresh_google_token(current_user: User = Depends(get_current_use
     except Exception as e:
         print(f"Error explicitly refreshing Google token for {user_email}: {e}")
         if "invalid_grant" in str(e).lower():
-            # await db.delete(db_token_entry) # Consider if token should be deleted
-            # await db.commit()
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token is invalid or revoked. Please re-authenticate.")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to refresh Google token: {str(e)}")
 
