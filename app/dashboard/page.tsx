@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import SidebarNav from "@/components/SidebarNav";
-import ThreadList from "@/components/MailDisplay";
-import ThreadDetailView from "@/components/MailDetailView";
+import ThreadList from "@/components/ThreadList";
+import ThreadDetailView from "@/components/ThreadDetailView";
 import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
 

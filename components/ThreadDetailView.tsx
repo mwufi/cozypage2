@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Loader2, MessageSquareReply, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { format, parseISO, isValid, parse } from 'date-fns';
 
 // --- Interfaces (Should be defined/imported consistently) ---
 interface GmailMessage {
@@ -110,60 +111,66 @@ const getEmailBody = (payload: any): { type: 'html' | 'text', content: string } 
 };
 
 // --- Individual Message/Draft Renderer ---
-// Extracted rendering logic for a single message/draft card
 const MessageCard: React.FC<{ message: GmailMessage, isDraft?: boolean }> = ({ message, isDraft = false }) => {
     const headers = message.payload?.headers || [];
     const subject = headers.find((h: any) => h.name.toLowerCase() === 'subject')?.value || '(No Subject)';
     const from = headers.find((h: any) => h.name.toLowerCase() === 'from')?.value || 'N/A';
-    const date = message.internalDate ? new Date(parseInt(message.internalDate)).toLocaleString() : 'N/A';
+    const dateStr = message.internalDate;
+    let displayDate = 'N/A';
+    if (dateStr) {
+        try {
+            const date = new Date(parseInt(dateStr));
+            // Format date and time separately, then join
+            displayDate = isValid(date) ? `${format(date, 'EEE, MMM d, yyyy')} at ${format(date, 'h:mm a')}` : 'Invalid Date';
+        } catch (e) { displayDate = 'Invalid Date'; }
+    }
     const to = headers.find((h: any) => h.name.toLowerCase() === 'to')?.value || 'N/A';
+    const cc = headers.find((h: any) => h.name.toLowerCase() === 'cc')?.value;
     const bodyInfo = getEmailBody(message.payload);
-    const [isExpanded, setIsExpanded] = useState(false);
-
-    // Use snippet as fallback if body parsing fails
-    const displayContent = bodyInfo ? bodyInfo.content : message.snippet;
+    const displayContent = bodyInfo ? bodyInfo.content : message.snippet || "(No body or snippet)";
     const contentType = bodyInfo ? bodyInfo.type : 'text';
+    const cardId = `message-${message.id}${isDraft ? '-draft' : ''}`;
 
     return (
-        <div className={`p-3 rounded border ${isDraft ? 'border-yellow-600 bg-yellow-900 bg-opacity-20' : 'border-gray-700 bg-gray-800'} mb-3 shadow-sm`}>
-            <div className="flex justify-between items-center mb-1 cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
-                <div className="text-xs text-gray-400 truncate pr-2">
-                    <span className="font-semibold text-gray-300">{isDraft ? 'Draft - To:' : 'From:'}</span> {isDraft ? to : from}
+        <div id={cardId} className={`p-4 rounded-lg border ${isDraft ? 'border-yellow-700 bg-yellow-950' : 'border-gray-700 bg-gray-800'} mb-4 shadow-md`}>
+            {/* Header: From/To, Date */}
+            <div className="flex justify-between items-start mb-2">
+                <div className="text-sm">
+                    <span className={`font-semibold ${isDraft ? 'text-yellow-300' : 'text-gray-200'}`}>{isDraft ? 'Draft' : from}</span>
+                    {isDraft && <span className="text-xs text-yellow-500 ml-2">(To: {to})</span>}
+                    {!isDraft && <span className="text-xs text-gray-400 ml-2">(To: {to})</span>}
+                    {cc && !isDraft && <span className="text-xs text-gray-500 ml-2">(Cc: {cc})</span>}
                 </div>
-                <span className="text-xs text-gray-500 whitespace-nowrap">{date}</span>
+                <span className="text-xs text-gray-500 whitespace-nowrap flex-shrink-0 ml-2">{displayDate}</span>
             </div>
 
+            {/* Subject (only for drafts maybe? Or always?) */}
             {isDraft && (
-                <p className="text-xs text-yellow-400 font-semibold mb-1">Subject: {subject}</p>
+                <h3 className="text-base font-semibold text-yellow-300 mb-2">{subject}</h3>
             )}
 
-            {/* Show snippet or short preview initially */}
-            {!isExpanded && (
-                <p className="text-xs text-gray-400 line-clamp-2 cursor-pointer" onClick={() => setIsExpanded(true)}>
-                    {message.snippet || "(No snippet)"}
-                </p>
-            )}
+            {/* Body Content */}
+            <div className="mt-1 text-sm leading-relaxed">
+                {contentType === 'html' ? (
+                    <div
+                        className="prose prose-sm prose-invert max-w-none gmail-html-body"
+                        dangerouslySetInnerHTML={{ __html: displayContent }}
+                    />
+                ) : (
+                    <pre className="whitespace-pre-wrap break-words text-gray-200">{displayContent}</pre>
+                )}
+            </div>
 
-            {/* Show full body when expanded */}
-            {isExpanded && displayContent && (
-                <div className="mt-2 pt-2 border-t border-gray-600">
-                    {contentType === 'html' ? (
-                        <div
-                            className="prose prose-sm prose-invert max-w-none gmail-html-body text-xs"
-                            dangerouslySetInnerHTML={{ __html: displayContent }}
-                        />
-                    ) : (
-                        <pre className="whitespace-pre-wrap break-words text-gray-200 text-xs">{displayContent}</pre>
-                    )}
+            {/* Draft Actions (placeholder) */}
+            {isDraft && (
+                <div className="mt-3 pt-2 border-t border-yellow-800 flex justify-end">
+                    <Button variant="outline" size="sm" className="text-xs mr-2 border-yellow-600 text-yellow-300 hover:bg-yellow-800">
+                        Edit (not implemented)
+                    </Button>
+                    <Button variant="destructive" size="sm" className="text-xs">
+                        Discard (not implemented)
+                    </Button>
                 </div>
-            )}
-            {isExpanded && !displayContent && (
-                <p className="mt-2 pt-2 border-t border-gray-600 text-xs text-gray-500">(Could not display body)</p>
-            )}
-            {isDraft && isExpanded && (
-                <Button variant="link" size="sm" className="text-xs text-yellow-400 p-0 h-auto mt-1">
-                    Edit Draft (not implemented)
-                </Button>
             )}
         </div>
     );
@@ -225,12 +232,23 @@ const ThreadDetailView: React.FC<ThreadDetailViewProps> = ({ threadData, isLoadi
         return <p className="text-gray-500 p-4">Select a conversation to view.</p>;
     }
 
-    // Combine messages and drafts, maybe sort by date later if needed
+    // Combine and Sort messages and drafts by date
     const combinedItems = [
-        ...(threadData.messages || []).map(msg => ({ item: msg, type: 'message' as const })),
-        ...(threadData.drafts || []).map(draft => ({ item: draft, type: 'draft' as const }))
+        ...(threadData.messages || []).map(msg => ({
+            item: msg,
+            type: 'message' as const,
+            date: msg.internalDate ? parseInt(msg.internalDate) : 0
+        })),
+        ...(threadData.drafts || []).map(draft => ({
+            item: draft,
+            type: 'draft' as const,
+            // Drafts don't have an internalDate in the summary. We might need to fetch the draft message 
+            // detail to get a reliable date, or place them at the end/top.
+            // For now, let's place them at the end by giving them a large date value.
+            date: Date.now() + (parseInt(draft.id, 36) || 0) // Use draft ID for semi-stable future date
+        }))
     ];
-    // TODO: Sort combinedItems by date (requires parsing internalDate or draft message date)
+    combinedItems.sort((a, b) => a.date - b.date);
 
     return (
         <div className="p-1 md:p-4 h-full flex flex-col">
@@ -267,7 +285,8 @@ const ThreadDetailView: React.FC<ThreadDetailViewProps> = ({ threadData, isLoadi
                 {combinedItems.map(({ item, type }) => (
                     type === 'message'
                         ? <MessageCard key={item.id} message={item as GmailMessage} />
-                        : <MessageCard key={item.id} message={(item as GmailDraft).message as GmailMessage} isDraft={true} /> // Pass draft message stub
+                        // Attempt to render draft card using the message stub if available
+                        : <MessageCard key={item.id} message={(item as GmailDraft).message as GmailMessage || { id: item.id, payload: { headers: [{ name: 'Subject', value: 'Draft' }] } } as GmailMessage} isDraft={true} />
                 ))}
                 {combinedItems.length === 0 && (
                     <p className="text-gray-500">No messages or drafts in this conversation.</p>
