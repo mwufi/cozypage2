@@ -29,15 +29,15 @@ COPY . .
 # Make port 8000 available to the world outside this container
 EXPOSE 8000
 
-# Define environment variables that can be overridden at runtime
-ENV JWT_SECRET_KEY="your-super-secret-jwt-key-please-change"
-ENV FRONTEND_APP_URL="http://localhost:3000"
-ENV BACKEND_BASE_URL="http://localhost:8000"
-ENV SESSION_SECRET_KEY="your-session-secret-key-please-change"
-# Example, override this in your docker run command or docker-compose file
-ENV DATABASE_URL="postgresql+asyncpg://user:password@host:port/dbname"
-# Ensure OAUTHLIB_INSECURE_TRANSPORT is set for development if using HTTP for callbacks
-# ENV OAUTHLIB_INSECURE_TRANSPORT="1"
+# # Define environment variables that can be overridden at runtime
+# ENV JWT_SECRET_KEY="your-super-secret-jwt-key-please-change"
+# ENV FRONTEND_APP_URL="http://localhost:3000"
+# ENV BACKEND_BASE_URL="http://localhost:8000"
+# ENV SESSION_SECRET_KEY="your-session-secret-key-please-change"
+# # Example, override this in your docker run command or docker-compose file
+# ENV DATABASE_URL="postgresql+asyncpg://user:password@host:port/dbname"
+# # Ensure OAUTHLIB_INSECURE_TRANSPORT is set for development if using HTTP for callbacks
+# # ENV OAUTHLIB_INSECURE_TRANSPORT="1"
 
 # Command to run the application
 # Ensure your main.py and the app object are correctly referenced
