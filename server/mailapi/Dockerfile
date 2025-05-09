@@ -24,7 +24,7 @@ RUN uv pip install --system --no-cache-dir -r requirements.txt
 # Copy the rest of the application code into the container
 # We'll copy the entire mailapi directory content into /app
 # Adjust if your main.py is in a subdirectory of mailapi, e.g., COPY . .
-COPY . .
+COPY . /app/server/mailapi
 
 # Make port 8000 available to the world outside this container
 EXPOSE 8000
@@ -43,4 +43,4 @@ EXPOSE 8000
 # Ensure your main.py and the app object are correctly referenced
 # The command from your comments was: uvicorn server.mailapi.main:app --reload
 # For production, remove --reload and specify host and port
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"] 
+CMD ["uvicorn", "server.mailapi.main:app", "--host", "0.0.0.0", "--port", "8000"] 
