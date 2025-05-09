@@ -376,6 +376,6 @@ if __name__ == "__main__":
 @app.on_event("startup")
 async def on_startup():
     """Create database tables on startup."""
-    print("Creating database tables...")
-    await create_db_and_tables()
-    print("Database tables created (if they didn't exist).")
+    print("Skipping automatic table creation. Use Alembic for migrations.")
+    # await create_db_and_tables() # Commented out: Alembic will handle this
+    # print("Database tables created (if they didn't exist).")

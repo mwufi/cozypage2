@@ -1,0 +1,34 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Environments
+.env
+.venv
+.python-version
+uv.lock
+pyproject.toml
+
+# IDE / Editor specific
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git specific
+.git
+.gitignore
+
+# Test files & docs (if not needed in prod image)
+# tests/
+# docs/
+
+# Example files
+client_secret.example.json
+README.md
+
+# Other
+.DS_Store
+mailapi.egg-info/ 
