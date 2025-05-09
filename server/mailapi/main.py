@@ -19,8 +19,9 @@ import google.auth.transport.requests # Added for token refresh consistency
 
 # --- Database Imports --- 
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select # For SQLAlchemy 2.0 style queries
 from .database import engine, Base, get_db, create_db_and_tables # Import DB components
-from .models import UserGoogleToken # Import the model
+from .models import UserGoogleToken, Profile # Import Profile model
 # --- End Database Imports ---
 
 # OAuth2 configuration
@@ -233,29 +234,71 @@ async def auth_google_callback(request: Request, code: str, state: str, db: Asyn
     userinfo_service = googleapiclient.discovery.build("oauth2", "v2", credentials=credentials)
     user_info = userinfo_service.userinfo().get().execute()
     user_email = user_info.get("email")
+    user_name = user_info.get("name") # Get user's name from Google profile
+    # user_picture = user_info.get("picture") # Optional: get user's picture
 
     if not user_email:
         return JSONResponse({"error": "Could not retrieve user email from Google"}, status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    # --- Profile Handling --- 
+    # Check if a profile exists for this user_email, or create one.
+    profile_query = await db.execute(select(Profile).where(Profile.user_email == user_email))
+    db_profile = profile_query.scalar_one_or_none()
+
+    if not db_profile:
+        print(f"No profile found for {user_email}, creating one.")
+        db_profile = Profile(
+            user_email=user_email,
+            username=user_name # Set username from Google profile if available
+            # color_theme could be set to a default or left null
+        )
+        db.add(db_profile)
+        # We need to flush to get the db_profile.id if it's new
+        # Or commit and then refresh. Let's commit profile separately first or handle via token update.
+        # For simplicity, let's commit here. If token saving fails, this profile might be orphaned.
+        # A better approach might be to add both and commit once, but requires careful error handling.
+        await db.flush() # Flush to get the ID of the new profile
+        # await db.refresh(db_profile) # Refresh to get any DB-generated fields like ID, created_at
+        print(f"Created new profile for {user_email} with ID {db_profile.id}")
+    else:
+        print(f"Found existing profile for {user_email} with ID {db_profile.id}")
+        # Optionally update profile fields like username if they logged in with Google again
+        if db_profile.username != user_name and user_name:
+             db_profile.username = user_name
+             print(f"Updating username for {user_email} to {user_name}")
+    # --- End Profile Handling ---
+
     # Store/Update Google tokens in the database
     token_data_dict = credentials_to_dict(credentials)
-    db_token_entry = await db.get(UserGoogleToken, user_email)
+    # We use UserGoogleToken.user_email as PK, which is the email from this specific Google account.
+    db_token_entry_query = await db.execute(select(UserGoogleToken).where(UserGoogleToken.user_email == user_email))
+    db_token_entry = db_token_entry_query.scalar_one_or_none()
+
     if db_token_entry:
         # Update existing entry
         for key, value in token_data_dict.items():
             setattr(db_token_entry, key, value)
-        print(f"Updating Google tokens for {user_email} in DB.")
+        db_token_entry.profile_id = db_profile.id # Ensure profile_id is linked
+        print(f"Updating Google tokens for {user_email} in DB, linked to profile ID {db_profile.id}.")
     else:
-        # Create new entry
-        db_token_entry = UserGoogleToken(user_email=user_email, **token_data_dict)
+        # Create new entry, ensuring it's linked to the profile
+        db_token_entry = UserGoogleToken(
+            user_email=user_email, # This is the Google account's email
+            profile_id=db_profile.id, # Link to the profile
+            **token_data_dict
+        )
         db.add(db_token_entry)
-        print(f"Storing new Google tokens for {user_email} in DB.")
+        print(f"Storing new Google tokens for {user_email} in DB, linked to profile ID {db_profile.id}.")
     
-    await db.commit() # Commit the session here to save changes to DB
-    await db.refresh(db_token_entry) # Refresh to get any DB-generated fields (not applicable here but good practice)
+    await db.commit() # Commit changes for Profile (if new/updated) and UserGoogleToken
+    await db.refresh(db_profile) # Refresh profile to get all fields like created_at, updated_at
+    if db_token_entry: # Refresh token entry if it was created/updated
+        await db.refresh(db_token_entry)
 
     # Create JWT for our frontend
-    jwt_payload = {"sub": user_email}
+    # The JWT subject ("sub") should ideally be the Profile's unique user_email or ID.
+    # Sticking with user_email for now as that's what get_current_user expects.
+    jwt_payload = {"sub": db_profile.user_email} 
     app_jwt = create_access_token(data=jwt_payload)
 
     frontend_callback_url = f"{FRONTEND_APP_URL}/auth/callback?jwt={app_jwt}"
