@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation'; // Updated imports
+import { Suspense, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function AuthCallbackPage() {
+// New component to contain the logic
+function AuthCallbackContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const jwt = searchParams.get('jwt');
@@ -12,7 +13,7 @@ export default function AuthCallbackPage() {
         async function storeTokenAndRedirect() {
             if (jwt) {
                 try {
-                    const response = await fetch('/api/auth/store-session', { // Updated endpoint name
+                    const response = await fetch('/api/auth/store-session', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -21,12 +22,9 @@ export default function AuthCallbackPage() {
                     });
 
                     if (response.ok) {
-                        // Token stored successfully, redirect to the Drive page or dashboard
                         router.push('/drive');
                     } else {
-                        // Handle error storing token
                         console.error('Failed to store session token');
-                        // Redirect to an error page or login page with an error message
                         router.push('/login?error=session_store_failed');
                     }
                 } catch (error) {
@@ -34,7 +32,6 @@ export default function AuthCallbackPage() {
                     router.push('/login?error=api_call_failed');
                 }
             } else {
-                // No JWT in query params, redirect to login or error page
                 console.error('No JWT found in callback');
                 router.push('/login?error=jwt_missing');
             }
@@ -48,5 +45,13 @@ export default function AuthCallbackPage() {
             <p className="text-lg text-gray-600">Processing authentication...</p>
             {/* You can add a spinner component here */}
         </div>
+    );
+}
+
+export default function AuthCallbackPage() {
+    return (
+        <Suspense fallback={<div className="flex justify-center items-center h-screen"><p className="text-lg text-gray-600">Loading...</p></div>}>
+            <AuthCallbackContent />
+        </Suspense>
     );
 } 
