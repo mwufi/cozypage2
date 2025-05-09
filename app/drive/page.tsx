@@ -13,7 +13,7 @@ interface DriveApiResponse {
     link?: string;
 }
 
-const PYTHON_BACKEND_URL = process.env.NEXT_PUBLIC_PYTHON_BACKEND_URL || 'http://localhost:8000';
+const PYTHON_BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
 const GOOGLE_LOGIN_URL = `${PYTHON_BACKEND_URL}/auth/google/login`;
 
 export default function DrivePage() {
