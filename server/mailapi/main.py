@@ -25,7 +25,14 @@ from .models import UserGoogleToken, Profile # Import Profile model
 # --- End Database Imports ---
 
 # OAuth2 configuration
-CLIENT_SECRETS_FILE = "server/mailapi/client_secret.json"
+# CLIENT_SECRETS_FILE = "server/mailapi/client_secret.json" # Removed: Will load from env vars
+# Instead of CLIENT_SECRETS_FILE, ensure these environment variables are set in production:
+# GOOGLE_CLIENT_ID
+# GOOGLE_CLIENT_SECRET
+# GOOGLE_PROJECT_ID (optional, but good practice)
+# GOOGLE_AUTH_URI (defaults to "https://accounts.google.com/o/oauth2/auth")
+# GOOGLE_TOKEN_URI (defaults to "https://oauth2.googleapis.com/token")
+
 SCOPES = [
     'openid', # Add openid scope
     'https://www.googleapis.com/auth/userinfo.email', # Request email to identify user
@@ -197,8 +204,34 @@ async def get_refreshed_google_credentials(
     return credentials
 
 def get_google_flow(state: Optional[str] = None) -> google_auth_oauthlib.flow.Flow:
-    flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(
-        CLIENT_SECRETS_FILE, 
+    # Load client secrets from environment variables
+    client_id = os.getenv("GOOGLE_CLIENT_ID")
+    client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+    project_id = os.getenv("GOOGLE_PROJECT_ID") # Optional
+    auth_uri = os.getenv("GOOGLE_AUTH_URI", "https://accounts.google.com/o/oauth2/auth")
+    token_uri = os.getenv("GOOGLE_TOKEN_URI", "https://oauth2.googleapis.com/token")
+
+    if not client_id or not client_secret:
+        # In a real application, you might want to log this error more formally
+        # or raise a more specific configuration error.
+        print("FATAL ERROR: GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables are not set.")
+        raise ValueError("Google OAuth client ID and secret must be set in environment variables for the application to function.")
+
+    client_config = {
+        "web": {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "project_id": project_id, # Will be None if not set, which is fine
+            "auth_uri": auth_uri,
+            "token_uri": token_uri,
+            # redirect_uris is typically part of client_secret.json, but
+            # flow.redirect_uri is set explicitly below, which is preferred for clarity.
+            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs", # Standard value
+        }
+    }
+
+    flow = google_auth_oauthlib.flow.Flow.from_client_config(
+        client_config,
         scopes=SCOPES,
         state=state
     )
