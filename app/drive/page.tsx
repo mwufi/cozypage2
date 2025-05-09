@@ -112,11 +112,12 @@ export default function DrivePage() {
         <div className="container mx-auto p-4 text-gray-100 bg-gray-800 min-h-screen">
             <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-700">
                 <h1 className="text-4xl font-bold text-white">Your Google Drive Files</h1>
-                <Link href="/api/auth/logout" legacyBehavior>
-                    <a className="px-5 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold shadow-md">
-                        Logout
-                    </a>
-                </Link>
+                <button
+                    onClick={() => window.location.href = '/api/auth/logout'}
+                    className="px-5 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold shadow-md"
+                >
+                    Logout
+                </button>
             </div>
 
             {error && (

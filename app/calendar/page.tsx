@@ -167,9 +167,12 @@ export default function CalendarPage() {
                     >
                         Create Event
                     </button>
-                    <Link href="/api/auth/logout" legacyBehavior>
-                        <a className="px-5 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold shadow-md">Logout</a>
-                    </Link>
+                    <button
+                        onClick={() => window.location.href = '/api/auth/logout'}
+                        className="px-5 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold shadow-md"
+                    >
+                        Logout
+                    </button>
                 </div>
             </div>
 
