@@ -19,7 +19,7 @@ COPY requirements.txt .
 RUN pip install uv
 
 # Now, use uv to install the dependencies from requirements.txt
-RUN uv pip install --no-cache-dir -r requirements.txt
+RUN uv pip install --system --no-cache-dir -r requirements.txt
 
 # Copy the rest of the application code into the container
 # We'll copy the entire mailapi directory content into /app
