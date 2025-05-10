@@ -1,0 +1,37 @@
+services:
+  mailapi:
+    build: ./mailapi
+    ports:
+      - "8000:8000"
+    working_dir: /app
+    volumes:
+      - ./mailapi:/app/server/mailapi
+      - ./mailapi/.env:/app/server/mailapi/.env:ro
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/mailapi
+      - OAUTHLIB_INSECURE_TRANSPORT=1
+    depends_on:
+      - db
+
+  python-hello-world:
+    build: ./restate_services/python-hello-world
+    ports:
+      - "9080:9080"
+    working_dir: /usr/src/app
+    volumes:
+      - ./restate_services/python-hello-world:/usr/src/app
+
+  db:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: mailapi
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
