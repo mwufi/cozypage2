@@ -12,7 +12,7 @@ WORKDIR /app
 # RUN apt-get update && apt-get install -y --no-install-recommends some-package && rm -rf /var/lib/apt/lists/*
 
 # Copy the requirements file into the container
-COPY requirements.txt .
+COPY mailapi/requirements.txt .
 
 # Install Python dependencies using uv
 # First, ensure uv is installed. We'll use pip to install uv itself.
@@ -21,10 +21,11 @@ RUN pip install uv
 # Now, use uv to install the dependencies from requirements.txt
 RUN uv pip install --system --no-cache-dir -r requirements.txt
 
+# Copy the shared code into the container
+COPY shared /app/server/shared
+
 # Copy the rest of the application code into the container
-# We'll copy the entire mailapi directory content into /app
-# Adjust if your main.py is in a subdirectory of mailapi, e.g., COPY . .
-COPY . /app/server/mailapi
+COPY mailapi /app/server/mailapi
 
 # Make port 8000 available to the world outside this container
 EXPOSE 8000
@@ -41,6 +42,5 @@ EXPOSE 8000
 
 # Command to run the application
 # Ensure your main.py and the app object are correctly referenced
-# The command from your comments was: uvicorn server.mailapi.main:app --reload
 # For production, remove --reload and specify host and port
-CMD ["uvicorn", "server.mailapi.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"] 
+CMD ["uvicorn", "server.mailapi.main:app", "--host", "0.0.0.0", "--port", "8000"] 

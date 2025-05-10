@@ -40,12 +40,12 @@ SCOPES = [
     'openid', # Add openid scope
     'https://www.googleapis.com/auth/userinfo.email', # Request email to identify user
     'https://www.googleapis.com/auth/userinfo.profile',
-    'https://www.googleapis.com/auth/drive.metadata.readonly',
     'https://www.googleapis.com/auth/drive.file',
     'https://www.googleapis.com/auth/calendar.readonly',
+    'https://www.googleapis.com/auth/calendar.freebusy',
     'https://www.googleapis.com/auth/calendar.events',
     'https://www.googleapis.com/auth/gmail.readonly',
-    'https://www.googleapis.com/auth/gmail.compose' # Scope for creating drafts and sending mail
+    'https://www.googleapis.com/auth/gmail.modify'
 ]
 DRIVE_API_SERVICE_NAME = 'drive'
 DRIVE_API_VERSION = 'v2'
@@ -173,6 +173,8 @@ async def get_refreshed_google_credentials(
             detail="User Google tokens not found in DB. Please re-authenticate."
         )
     
+    print(f"DB token entry: {db_token_entry}")
+
     # Construct dict specifically for Google Credentials, excluding user_email
     token_data_for_google_creds = {
         'token': db_token_entry.token,
@@ -272,6 +274,7 @@ async def auth_google_login(request: Request):
 @app.get("/auth/google/callback")
 async def auth_google_callback(request: Request, code: str, state: str, db: AsyncSession = Depends(get_db)):
     stored_state = request.session.pop("oauth_state", None)
+    print(f"Stored state: {stored_state}, received state: {state}")
     if not stored_state or stored_state != state:
         return JSONResponse({"error": "State mismatch"}, status_code=status.HTTP_400_BAD_REQUEST)
 
