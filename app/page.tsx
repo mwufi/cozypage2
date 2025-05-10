@@ -235,18 +235,18 @@ export default function Home() {
               >
                 About Us
               </a>
-              <a
-                href="#"
+              <Link
+                href="/privacy"
                 className="text-blue-300 hover:text-white transition-colors"
               >
                 Privacy
-              </a>
-              <a
-                href="#"
+              </Link>
+              <Link
+                href="/tos"
                 className="text-blue-300 hover:text-white transition-colors"
               >
-                Contact
-              </a>
+                Terms of Service
+              </Link>
             </div>
             <div className="flex justify-center gap-2 mb-4">
               <button className="bg-white/10 hover:bg-white/20 transition-colors rounded-full p-2 hover:scale-110 transition-transform">
