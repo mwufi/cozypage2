@@ -30,11 +30,11 @@ async def greet(ctx: Context, req: GreetingRequest) -> Greeting:
     return Greeting(message=f"You said hi to {req.name}!")
 
 def something_else(id: str):
-    return f"We received {id}"
+    return f"We got: {id}"
 
 @greeter.handler()
 async def nofail(ctx: Context, req: GreetingRequest) -> Greeting:
-    await ctx.run("something else", lambda: something_else(req.name))
-    return Greeting(message=f"You said hi to {req.name}!")
+    response = await ctx.run("something else", lambda: something_else(req.name))
+    return Greeting(message=f"You said hi to {req.name}! {response}")
 
 app = restate.app(services=[greeter])
