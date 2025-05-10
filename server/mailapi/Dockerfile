@@ -43,4 +43,4 @@ EXPOSE 8000
 # Ensure your main.py and the app object are correctly referenced
 # The command from your comments was: uvicorn server.mailapi.main:app --reload
 # For production, remove --reload and specify host and port
-CMD ["uvicorn", "server.mailapi.main:app", "--host", "0.0.0.0", "--port", "8000"] 
+CMD ["uvicorn", "server.mailapi.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"] 

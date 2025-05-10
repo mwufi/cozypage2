@@ -11,7 +11,7 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/mailapi
       - OAUTHLIB_INSECURE_TRANSPORT=1
-      - PYTHONPATH=/app:/app/server/mailapi
+      - PYTHONPATH=/app:/app/server:/app/server/mailapi
     depends_on:
       - db
 

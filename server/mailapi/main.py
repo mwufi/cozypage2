@@ -1,4 +1,7 @@
 import os
+from dotenv import load_dotenv # Add this import
+load_dotenv() # Add this line to load environment variables
+
 import jwt # For JWT
 from datetime import datetime, timedelta # For JWT expiry
 from typing import Dict, Optional, List
