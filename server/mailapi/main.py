@@ -511,7 +511,11 @@ async def create_todo(
 
     try:
         print(f"Calling Restate service at {actual_restate_url} to complete todo ID: {db_todo.id}")
-        response = requests.post(actual_restate_url, json={"todoId": db_todo.id})
+        # Get the Restate API key from environment variable
+        restate_api_key = os.getenv("RESTATE_API_KEY")
+        headers = {"Authorization": f"Bearer {restate_api_key}"} if restate_api_key else {}
+        
+        response = requests.post(actual_restate_url, json={"todoId": db_todo.id}, headers=headers)
         response.raise_for_status() # Raise an exception for HTTP errors
         print(f"Restate service responded for todo {db_todo.id}: {response.status_code}")
         # Note: The actual completion in the DB is handled by the Restate service itself.
