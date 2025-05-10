@@ -496,23 +496,17 @@ async def create_todo(
     await db.refresh(db_todo)
 
     # Call Restate service to mark the todo as complete (as per user's plan)
-    # The Restate service runs on port 9080 (python-hello-world)
-    restate_service_url = "http://localhost:9080/Greeter/completeTodo"
-    try:
-        # Note: The docker-compose setup exposes python-hello-world on host port 9080.
-        # If mailapi (running in its own container) needs to call python-hello-world,
-        # it should use the service name and container port: http://python-hello-world:9080
-        # However, for the initial described flow `curl localhost:8080/...` implies the call might originate
-        # from the host or a context where localhost:9080 directly reaches the restate service.
-        # For inter-service communication within Docker, service names are preferred.
-        # Let's assume for now the provided curl example implies direct accessibility for the PoC.
-        # If running from host: "http://localhost:9080/Greeter/completeTodo"
-        # If mailapi calls python-hello-world container-to-container: "http://python-hello-world:9080/Greeter/completeTodo"
-        
-        # Using localhost as specified in the initial curl example from the user.
-        # This might need adjustment depending on where the final call originates or if this API is called from the host.
-        actual_restate_url = "http://python-hello-world:9080/Greeter/completeTodo" # For container-to-container
+    # Default to inter-container communication if RESTATE_URL is not set
+    default_restate_service_hostname = "python-hello-world"
+    restate_service_url_from_env = os.getenv("RESTATE_URL")
+    
+    if restate_service_url_from_env:
+        actual_restate_url = f"{restate_service_url_from_env}/Greeter/completeTodo"
+    else:
+        # Fallback if RESTATE_URL is not defined (e.g., for other deployment scenarios)
+        actual_restate_url = f"http://{default_restate_service_hostname}:9080/Greeter/completeTodo"
 
+    try:
         print(f"Calling Restate service at {actual_restate_url} to complete todo ID: {db_todo.id}")
         response = requests.post(actual_restate_url, json={"todoId": db_todo.id})
         response.raise_for_status() # Raise an exception for HTTP errors

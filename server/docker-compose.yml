@@ -12,6 +12,7 @@ services:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/mailapi
       - OAUTHLIB_INSECURE_TRANSPORT=1
       - PYTHONPATH=/app:/app/server:/app/server/mailapi
+      - RESTATE_URL=http://host.docker.internal:8080
     depends_on:
       - db
 
