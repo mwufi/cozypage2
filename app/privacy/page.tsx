@@ -79,6 +79,10 @@ export default function PrivacyPolicyPage() {
                             <li>To comply with legal obligations</li>
                         </ul>
 
+                        <p>
+                            Google Workspace APIs are not used to develop, improve, or train generalized AI and/or ML models.
+                        </p>
+
                         <h3 className="text-xl font-semibold text-blue-200 mb-2">3.2 Google Workspace Data Usage</h3>
                         <p>
                             We use Google Workspace data solely for the following productivity purposes:
