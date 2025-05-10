@@ -1,21 +1,22 @@
-from sqlalchemy import Column, String, Text, JSON, Integer, DateTime, ForeignKey
+from sqlalchemy import Column, String, Text, JSON, Integer, DateTime, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func # For server_default=func.now()
-from .database import Base # Import Base from our database.py
+
+# from sqlalchemy.orm import declarative_base
+# Base = declarative_base()
+from shared.database_config.database import Base # Adjusted Base import
 
 class Profile(Base):
     __tablename__ = "profiles"
 
     id = Column(Integer, primary_key=True, index=True)
-    # Assuming user_email is the unique identifier for a user's profile
     user_email = Column(String, unique=True, index=True, nullable=False) 
     username = Column(String, nullable=True)
-    color_theme = Column(String, nullable=True, default="default") # Example default
+    color_theme = Column(String, nullable=True, default="default")
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    # Relationship to UserGoogleToken: A profile can have multiple Google tokens
     google_tokens = relationship("UserGoogleToken", back_populates="profile")
 
     def __repr__(self):
@@ -25,8 +26,6 @@ class Profile(Base):
 class UserGoogleToken(Base):
     __tablename__ = "user_google_tokens"
 
-    # user_email here is the email associated with THIS specific Google token/account.
-    # It might be different from the profile's primary user_email if a user links multiple Google accounts.
     user_email = Column(String, primary_key=True, index=True) 
     token = Column(String, nullable=False)
     refresh_token = Column(String, nullable=True)
@@ -35,16 +34,9 @@ class UserGoogleToken(Base):
     client_secret = Column(String, nullable=False)
     scopes = Column(JSON, nullable=False)
 
-    # Foreign Key to link to the Profile table's 'id'
     profile_id = Column(Integer, ForeignKey('profiles.id'), nullable=True, index=True) 
-    # Make profile_id nullable=False if every token MUST belong to a profile.
-    # Set to True for now to allow existing tokens to be migrated without a profile_id initially,
-    # or if you want to allow tokens that are not yet associated with a full profile.
-
-    # Relationship to Profile
     profile = relationship("Profile", back_populates="google_tokens")
     
-    # Timestamps for the token itself
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -61,8 +53,6 @@ class UserGoogleToken(Base):
 
     @classmethod
     def from_dict(cls, data: dict):
-        # Note: This doesn't handle profile_id association directly, 
-        # that would typically be handled by the calling logic.
         return cls(
             user_email=data.get("user_email"),
             token=data.get("token"),
@@ -71,4 +61,21 @@ class UserGoogleToken(Base):
             client_id=data.get("client_id"),
             client_secret=data.get("client_secret"),
             scopes=data.get("scopes", [])
-        ) 
+        )
+
+class Todo(Base):
+    __tablename__ = "todos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, index=True, nullable=False)
+    description = Column(Text, nullable=True)
+    completed = Column(Boolean, default=False, nullable=False)
+    # Optional: Link to a profile if todos are user-specific
+    # profile_id = Column(Integer, ForeignKey('profiles.id'), nullable=True)
+    # profile = relationship("Profile") # Add backref in Profile if needed
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    def __repr__(self):
+        return f"<Todo(id={self.id}, title='{self.title}', completed={self.completed})>" 

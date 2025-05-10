@@ -3,7 +3,7 @@ import jwt # For JWT
 from datetime import datetime, timedelta # For JWT expiry
 from typing import Dict, Optional, List
 
-from fastapi import FastAPI, Request, Depends, HTTPException, status, Response as FastAPIResponse # Added Response
+from fastapi import FastAPI, Request, Depends, HTTPException, status, Response as FastAPIResponse, Query
 from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse
 from fastapi.security import OAuth2PasswordBearer, HTTPAuthorizationCredentials, HTTPBearer # For JWT validation
 from pydantic import BaseModel
@@ -20,8 +20,8 @@ import google.auth.transport.requests # Added for token refresh consistency
 # --- Database Imports --- 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select # For SQLAlchemy 2.0 style queries
-from .database import engine, Base, get_db, create_db_and_tables # Import DB components
-from .models import UserGoogleToken, Profile # Import Profile model
+from shared.database_config.database import engine, Base, get_db, create_db_and_tables
+from shared.database_models.models import UserGoogleToken, Profile, Todo # Added Todo
 # --- End Database Imports ---
 
 # OAuth2 configuration
@@ -97,6 +97,23 @@ class TokenData(BaseModel):
 class User(BaseModel):
     email: str
     # Add other user fields if needed
+
+# Pydantic models for Todo
+class TodoBase(BaseModel):
+    title: str
+    description: Optional[str] = None
+
+class TodoCreate(TodoBase):
+    pass
+
+class TodoResponse(TodoBase):
+    id: int
+    completed: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        orm_mode = True # Changed from `from_attributes = True` for older Pydantic
 
 # JWT Utilities
 security = HTTPBearer()
@@ -455,3 +472,74 @@ async def on_startup():
     print("Skipping automatic table creation. Use Alembic for migrations.")
     # await create_db_and_tables() # Commented out: Alembic will handle this
     # print("Database tables created (if they didn't exist).")
+
+# --- Todo Endpoints ---
+@app.post("/todos", response_model=TodoResponse, status_code=status.HTTP_201_CREATED)
+async def create_todo(
+    todo_create: TodoCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user) # Assuming todos are user-specific
+):
+    db_todo = Todo(**todo_create.dict())
+    # If you want to associate the todo with the current user (profile):
+    # profile_query = await db.execute(select(Profile).where(Profile.user_email == current_user.email))
+    # db_profile = profile_query.scalar_one_or_none()
+    # if not db_profile:
+    #     raise HTTPException(status_code=404, detail="User profile not found")
+    # db_todo.profile_id = db_profile.id # Assuming you added profile_id to Todo model
+
+    db.add(db_todo)
+    await db.commit()
+    await db.refresh(db_todo)
+
+    # Call Restate service to mark the todo as complete (as per user's plan)
+    # The Restate service runs on port 9080 (python-hello-world)
+    restate_service_url = "http://localhost:9080/Greeter/completeTodo"
+    try:
+        # Note: The docker-compose setup exposes python-hello-world on host port 9080.
+        # If mailapi (running in its own container) needs to call python-hello-world,
+        # it should use the service name and container port: http://python-hello-world:9080
+        # However, for the initial described flow `curl localhost:8080/...` implies the call might originate
+        # from the host or a context where localhost:9080 directly reaches the restate service.
+        # For inter-service communication within Docker, service names are preferred.
+        # Let's assume for now the provided curl example implies direct accessibility for the PoC.
+        # If running from host: "http://localhost:9080/Greeter/completeTodo"
+        # If mailapi calls python-hello-world container-to-container: "http://python-hello-world:9080/Greeter/completeTodo"
+        
+        # Using localhost as specified in the initial curl example from the user.
+        # This might need adjustment depending on where the final call originates or if this API is called from the host.
+        actual_restate_url = "http://python-hello-world:9080/Greeter/completeTodo" # For container-to-container
+
+        print(f"Calling Restate service at {actual_restate_url} to complete todo ID: {db_todo.id}")
+        response = requests.post(actual_restate_url, json={"todoId": db_todo.id})
+        response.raise_for_status() # Raise an exception for HTTP errors
+        print(f"Restate service responded for todo {db_todo.id}: {response.status_code}")
+        # Note: The actual completion in the DB is handled by the Restate service itself.
+        # Here, we are just notifying it.
+    except requests.exceptions.RequestException as e:
+        print(f"Error calling Restate service for todo {db_todo.id}: {e}")
+        # Decide how to handle this: fail the request, log, or proceed without Restate call completion
+        # For now, we log and proceed, the todo is created but not marked by Restate.
+        # Consider raising an HTTPException or implementing a retry mechanism.
+        pass # Or raise HTTPException(status_code=503, detail=f"Todo created, but failed to call completion service: {e}")
+
+    return db_todo
+
+@app.get("/todos", response_model=List[TodoResponse])
+async def read_todos(
+    skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)
+    # current_user: User = Depends(get_current_user) # Uncomment if todos should be filtered by user
+):
+    query = select(Todo).offset(skip).limit(limit)
+    # if current_user:
+    #     # Assuming todos are linked to profiles and Profile has user_email
+    #     profile_query = await db.execute(select(Profile.id).where(Profile.user_email == current_user.email))
+    #     profile_id = profile_query.scalar_one_or_none()
+    #     if profile_id:
+    #         query = query.where(Todo.profile_id == profile_id)
+    #     else: # No profile found for user, so no todos for them (if todos are strictly profile-linked)
+    #         return []
+            
+    result = await db.execute(query)
+    todos = result.scalars().all()
+    return todos

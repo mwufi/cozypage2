@@ -6,10 +6,12 @@ services:
     working_dir: /app
     volumes:
       - ./mailapi:/app/server/mailapi
+      - ./shared:/app/server/shared
       - ./mailapi/.env:/app/server/mailapi/.env:ro
     environment:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/mailapi
       - OAUTHLIB_INSECURE_TRANSPORT=1
+      - PYTHONPATH=/app:/app/server/mailapi
     depends_on:
       - db
 
@@ -20,6 +22,12 @@ services:
     working_dir: /usr/src/app
     volumes:
       - ./restate_services/python-hello-world:/usr/src/app
+      - ./shared:/usr/src/app/shared
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/mailapi
+      - PYTHONPATH=/usr/src/app:/usr/src/app/src
+    depends_on:
+      - db
 
   db:
     image: postgres:15

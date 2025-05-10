@@ -18,7 +18,7 @@ else:
 # Add the parent directory of 'mailapi' (i.e., 'server/') to sys.path
 # This allows `from mailapi.models import Base` to work correctly.
 # Adjust the number of os.path.dirname calls if your alembic dir is nested differently.
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))) # Go up to /app
 
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import create_async_engine # For async engine
@@ -26,7 +26,8 @@ from sqlalchemy.ext.asyncio import create_async_engine # For async engine
 from alembic import context
 
 # Import Base from mailapi.models
-from mailapi.models import Base # Changed from `from models import Base`
+# from mailapi.models import Base # Changed from `from models import Base`
+from shared.database_config.database import Base # Use shared Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
