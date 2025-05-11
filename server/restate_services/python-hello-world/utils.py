@@ -16,3 +16,4 @@ def send_reminder(greeting_id: str):
         print(f"👻 Failed to send reminder: {greeting_id}")
         raise Exception(f"Failed to send reminder: {greeting_id}")
     print(f"Reminder sent: {greeting_id}")
+
